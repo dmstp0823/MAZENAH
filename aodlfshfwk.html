@@ -22,9 +22,9 @@
             font-weight: bold;    /* 굵게 표시 */
             margin-top: 30px;     /* 위쪽 여백 추가 */
         }
-        img {
+        video {
             margin: 20px 0;
-            width: 200px;         /* 이미지 너비 조정 */
+            max-width: 100%;      /* 화면 너비에 맞게 조정 */
             height: auto;         /* 높이는 비율에 맞게 자동 조정 */
         }
     </style>
@@ -33,5 +33,9 @@
     <h1>Hidden Ending</h1>
     <p>Q. 세상에 '사랑해'라는 단어가 없어진다면 어떻게 표현하고 싶으세요?</p>
     <p><strong><em>A. 매일 놀자!</em></strong></p>
+    <video controls autoplay loop>
+        <source src="HBDnah.mp4" type="video/mp4">
+        이 브라우저는 동영상을 지원하지 않습니다.
+    </video>
 </body>
 </html>
