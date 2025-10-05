@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>피버 타임! 물체 피하기</title>
+    <title>피버 타임! 물체 피하기 (Hard)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
         canvas { display: block; cursor: pointer; }
@@ -11,22 +11,23 @@
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    <audio id="bgm" src="./Love3.mp3" loop></audio>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const bgm = document.getElementById('bgm');
 
         let player, objects, score, spawnTimer, targetX;
         let gameState = 'startScreen';
         let lastTime = 0;
         let gameSpeedMultiplier = 1;
 
-        // --- 1. 피버 타임 관련 변수 추가 ---
-        let feverScore = 0; // 특수 물체 카운트
+        let feverScore = 0;
         let isFeverTime = false;
         let feverTimer = 0;
-        const FEVER_DURATION = 5000; // 피버 타임 지속 시간 (5초)
-        const FEVER_TRIGGER_COUNT = 10; // 피버 타임 발동 조건
+        const FEVER_DURATION = 5000;
+        const FEVER_TRIGGER_COUNT = 10;
 
         function init() {
             player = { width: 60, height: 20, x: canvas.width / 2 - 30, y: canvas.height - 60 };
@@ -35,10 +36,13 @@
             score = 0;
             spawnTimer = 0;
             gameSpeedMultiplier = 1;
-            feverScore = 0; // 피버 점수 초기화
+            feverScore = 0;
             isFeverTime = false;
             feverTimer = 0;
             gameState = 'playing';
+
+            bgm.currentTime = 0;
+            bgm.play();
         }
 
         function resizeCanvas() {
@@ -49,7 +53,6 @@
         }
         window.addEventListener('resize', resizeCanvas);
 
-        function getEventX(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
         function handleInteractionStart(e) {
             e.preventDefault();
             if (gameState === 'startScreen' || gameState === 'gameOver') init();
@@ -59,14 +62,14 @@
             e.preventDefault();
             if (gameState === 'playing' && (e.buttons === 1 || e.touches)) targetX = getEventX(e) - player.width / 2;
         }
+        function getEventX(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
         
         canvas.addEventListener('touchstart', handleInteractionStart);
         canvas.addEventListener('touchmove', handleInteractionMove);
         canvas.addEventListener('mousedown', handleInteractionStart);
         canvas.addEventListener('mousemove', handleInteractionMove);
 
-        // --- 그리기 함수들 ---
-        function drawStartScreen() { /* 이전과 동일 */ 
+        function drawStartScreen() {
             ctx.fillStyle = '#3498db';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'white';
@@ -76,9 +79,9 @@
             ctx.font = '24px Arial';
             ctx.fillText('화면을 눌러 시작하세요', canvas.width / 2, canvas.height / 2 + 20);
         }
-        function drawPlayer() { /* 이전과 동일 */ ctx.fillStyle = 'blue'; ctx.fillRect(player.x, player.y, player.width, player.height); }
-        function drawObjects() { /* 이전과 동일 */ objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
-        function drawGameOver() { /* 이전과 동일 */ 
+        function drawPlayer() { ctx.fillStyle = 'blue'; ctx.fillRect(player.x, player.y, player.width, player.height); }
+        function drawObjects() { objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
+        function drawGameOver() { 
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'white';
@@ -91,19 +94,14 @@
             ctx.fillText('Tap to Restart', canvas.width / 2, canvas.height / 2 + 40);
         }
 
-        // 2. 점수 및 피버 상태를 보여주는 UI 그리기 함수
         function drawUI() {
-            // 점수 표시
             ctx.fillStyle = 'black';
             ctx.font = '24px Arial';
             ctx.textAlign = 'left';
             ctx.fillText(`Score: ${score}`, 15, 30);
-
-            // 피버 게이지 표시
             ctx.fillText(`Fever: ${feverScore} / ${FEVER_TRIGGER_COUNT}`, 15, 60);
 
             if (isFeverTime) {
-                // 피버 타임 남은 시간 표시
                 ctx.fillStyle = 'orange';
                 ctx.font = 'bold 36px Arial';
                 ctx.textAlign = 'center';
@@ -112,65 +110,45 @@
             }
         }
 
-        // --- 로직 함수들 ---
-        function movePlayer() { /* 이전과 동일 */ 
+        function movePlayer() { 
             player.x = targetX;
             if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
         }
 
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime;
             gameSpeedMultiplier = 1 + (score * 0.02);
 
-            // 3. 피버 타임 로직
             if (isFeverTime) {
                 feverTimer -= deltaTime;
-                if (feverTimer <= 0) {
-                    isFeverTime = false; // 피버 타임 종료
-                }
-                // 피버 중에는 물체가 더 빨리, 많이 생성됨
-                if (spawnTimer > 150) { 
-                    objects.push({
-                        x: Math.random() * (canvas.width - 25), y: -25,
-                        width: 25, height: 25, speed: 200,
-                        type: 'good', color: 'red'
-                    });
+                if (feverTimer <= 0) isFeverTime = false;
+                if (spawnTimer > 120) { 
+                    objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' });
                     spawnTimer = 0;
                 }
             } else {
-                // 일반 상태 로직
-                if (spawnTimer > 700) {
-                    let type = 'good';
-                    let color = 'red';
+                if (spawnTimer > 450) {
+                    let type = 'good', color = 'red';
                     const rand = Math.random();
-                    if (rand < 0.3) { // 30% 확률로 나쁜 물체
-                        type = 'bad'; color = 'black';
-                    } else if (rand < 0.45) { // 15% 확률로 특수 물체
-                        type = 'special'; color = '#2ecc71'; // 초록색
-                    }
-                    
-                    objects.push({
-                        x: Math.random() * (canvas.width - 25), y: -25,
-                        width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100,
-                        type: type, color: color
-                    });
+                    if (rand < 0.3) { type = 'bad'; color = 'black'; }
+                    else if (rand < 0.45) { type = 'special'; color = '#2ecc71'; }
+                    objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
                     spawnTimer = 0;
                 }
             }
             
-            // 4. 충돌 처리 로직 수정
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i];
                 obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
-
                 if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
-
                 if (player.x < obj.x + obj.width && player.x + player.width > obj.x &&
                     player.y < obj.y + obj.height && player.y + player.height > obj.y) {
-                    
                     if (obj.type === 'bad') {
                         gameState = 'gameOver';
+                        bgm.pause();
                     } else if (obj.type === 'special') {
                         feverScore++;
                         objects.splice(i, 1);
@@ -179,7 +157,7 @@
                             feverTimer = FEVER_DURATION;
                             feverScore = 0;
                         }
-                    } else { // 'good' 타입
+                    } else {
                         score++;
                         objects.splice(i, 1);
                     }
@@ -187,13 +165,10 @@
             }
         }
 
-        // --- 메인 게임 루프 ---
         function gameLoop(timestamp) {
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             if (gameState === 'startScreen') {
                 drawStartScreen();
             } else if (gameState === 'playing') {
@@ -201,11 +176,10 @@
                 movePlayer();
                 drawObjects();
                 drawPlayer();
-                drawUI(); // 점수판 및 피버 UI 그리기
+                drawUI();
             } else if (gameState === 'gameOver') {
                 drawGameOver();
             }
-            
             requestAnimationFrame(gameLoop);
         }
         
