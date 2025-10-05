@@ -1,223 +1,231 @@
-// --- (firebaseConfig 등 이전 코드는 동일) ---
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>온라인 순위 경쟁! 물체 피하기</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <audio id="bgm" src="./Love3.mp3" loop></audio>
 
-// -------------------------------------------------------------------
-// 아래 코드 전체를 복사해서 script 태그 안에 붙여넣으세요.
-// -------------------------------------------------------------------
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const bgm = document.getElementById('bgm');
-bgm.volume = 0.5;
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
-// (이 부분은 이전 답변의 Firebase 설정 코드를 그대로 사용하시면 됩니다)
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const leaderboardCollection = db.collection('leaderboard');
+    <script>
+        // ==================================================================
+        // 여기에 Firebase에서 복사한 나만의 firebaseConfig 코드를 붙여넣으세요.
+        // 아래는 예시 코드이므로, 반드시 본인의 코드로 교체해야 합니다!
+        // ==================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBDYkDY4UxRP2182lKvHbqE6kZ1uJcHspg",
+            authDomain: "clover-game.firebaseapp.com",
+            projectId: "clover-game",
+            storageBucket: "clover-game.firebasestorage.app",
+            messagingSenderId: "596891629209",
+            appId: "1:596891629209:web:27b9c386df467d845aaa08"
+        };
+        // ==================================================================
 
+        // Firebase 앱 초기화
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const leaderboardCollection = db.collection('leaderboard');
 
-async function loadLeaderboard() {
-    try {
-        const snapshot = await leaderboardCollection.orderBy('score', 'desc').limit(10).get();
-        const leaderboard = [];
-        snapshot.forEach(doc => { leaderboard.push(doc.data()); });
-        return leaderboard;
-    } catch (error) { console.error("순위표 로딩 오류: ", error); return []; }
-}
+        // --- 이하 게임 코드 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const bgm = document.getElementById('bgm');
+        bgm.volume = 0.5;
 
-async function saveToLeaderboard(newScore, nickname) {
-    try {
-        // Firestore 보안 규칙에서 쓰기를 막았으므로, 이 부분은 현재 작동하지 않습니다.
-        // allow write: if true; 로 변경하면 다시 작동합니다.
-        await leaderboardCollection.add({ score: newScore, name: nickname });
-    } catch (error) { console.error("순위표 저장 오류: ", error); }
-}
-
-const characters = [ { id: 1, name: '블루', color: '#3498db', speed: 9 }, { id: 2, name: '그린', color: '#2ecc71', speed: 7 }, { id: 3, name: '퍼플', color: '#8e44ad', speed: 8 }];
-let selectedCharacterId = 1;
-let uiBoxes = {}; let startScreenState = 'main';
-let player, objects, score, spawnTimer, targetX;
-let gameState = 'startScreen';
-let lastTime = 0; let gameSpeedMultiplier = 1;
-let feverScore = 0, isFeverTime = false, feverTimer = 0;
-const FEVER_DURATION = 5000; const FEVER_TRIGGER_COUNT = 10;
-
-function init() {
-    const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
-    player = { width: 60, height: 20, x: canvas.width / 2 - 30, y: canvas.height - 60, speed: selectedCharacter.speed, color: selectedCharacter.color, dx: 0 };
-    targetX = player.x; objects = []; score = 0; spawnTimer = 0;
-    gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
-    gameState = 'playing';
-    bgm.currentTime = 0; bgm.play();
-}
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-    // 리사이즈 시에는 다시 그리기만 호출 (gameState 변경 없음)
-    if (gameState === 'startScreen') drawStartScreen();
-    if (gameState === 'gameOver') drawGameOver();
-    if (gameState === 'paused') drawPauseScreen();
-}
-window.addEventListener('resize', resizeCanvas);
-
-document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
-
-function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
-
-async function handleInteractionStart(e) {
-    e.preventDefault();
-    const pos = getEventPos(e);
-    if (gameState === 'startScreen') {
-        if (startScreenState === 'main') {
-            if (isInside(pos, uiBoxes.charSelectBtn)) startScreenState = 'characterSelect';
-            else if (isInside(pos, uiBoxes.leaderboardBtn)) startScreenState = 'leaderboard';
-            else if (isInside(pos, uiBoxes.startBtn)) init();
-        } else {
-            if (startScreenState === 'characterSelect') { uiBoxes.characterBoxes.forEach(box => { if (isInside(pos, box)) selectedCharacterId = box.id; }); }
-            if (isInside(pos, uiBoxes.backBtn)) startScreenState = 'main';
+        async function loadLeaderboard() {
+            try {
+                const snapshot = await leaderboardCollection.orderBy('score', 'desc').limit(10).get();
+                const leaderboard = [];
+                snapshot.forEach(doc => { leaderboard.push(doc.data()); });
+                return leaderboard;
+            } catch (error) { console.error("순위표 로딩 오류: ", error); return []; }
         }
-    } else if (gameState === 'playing') {
-        if (isInside(pos, pauseButtonBox)) { gameState = 'paused'; bgm.pause(); }
-        else { player.dx = 0; targetX = pos.x - player.width / 2; }
-    } else if (gameState === 'paused') {
-        gameState = 'playing'; bgm.play();
-    } else if (gameState === 'gameOver') {
-        const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-        if (nickname && nickname.trim() !== '') {
-            await saveToLeaderboard(score, nickname.trim());
+
+        async function saveToLeaderboard(newScore, nickname) {
+            try {
+                await leaderboardCollection.add({ score: newScore, name: nickname });
+            } catch (error) { console.error("순위표 저장 오류: ", error); }
         }
-        gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
-    }
-}
-
-async function drawStartScreen() {
-    uiBoxes = {};
-    ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (startScreenState === 'main') {
-        drawMainMenu();
-    } else if (startScreenState === 'leaderboard') {
-        await drawLeaderboardScreen(); // await 추가
-    } else if (startScreenState === 'characterSelect') {
-        drawCharacterSelectScreen();
-    }
-}
-
-function drawMainMenu() {
-    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
-    ctx.fillText('물체 피하기 게임', canvas.width / 2, canvas.height * 0.2);
-    const btnWidth = 250, btnHeight = 60, gap = 30; const btnX = (canvas.width - btnWidth) / 2, startY = canvas.height * 0.4;
-    uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
-    ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
-    ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', canvas.width / 2, startY + 38);
-    uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
-    ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-    ctx.fillStyle = 'white'; ctx.fillText('순위 보기', canvas.width / 2, startY + btnHeight + gap + 38);
-    uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
-    ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-    ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38);
-}
-
-async function drawLeaderboardScreen() {
-    const leaderboard = await loadLeaderboard();
-    ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-    ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.2);
-    ctx.font = '20px Arial';
-    if (leaderboard.length === 0) { ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3); }
-    else { leaderboard.forEach((entry, index) => { const rankText = `${index + 1}. ${entry.name} - ${entry.score}`; ctx.fillText(rankText, canvas.width / 2, canvas.height * 0.3 + index * 30); }); }
-    drawBackButton(canvas.height * 0.85);
-}
-
-function drawCharacterSelectScreen() {
-    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-    ctx.fillText('캐릭터를 선택하세요', canvas.width / 2, canvas.height * 0.2);
-    const boxWidth = 100, boxHeight = 100, gap = 20; const totalWidth = (boxWidth * characters.length) + (gap * (characters.length - 1));
-    let startX = (canvas.width - totalWidth) / 2;
-    uiBoxes.characterBoxes = [];
-    characters.forEach(char => {
-        const boxY = canvas.height * 0.4;
-        if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, boxWidth + 10, boxHeight + 10); }
-        ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, boxWidth, boxHeight);
-        ctx.fillStyle = '#2c3e50'; ctx.font = '20px Arial'; ctx.fillText(char.name, startX + boxWidth / 2, boxY + boxHeight + 30);
-        uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: boxWidth, height: boxHeight });
-        startX += boxWidth + gap;
-    });
-    drawBackButton(canvas.height * 0.85);
-}
-function drawBackButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (canvas.width - btnWidth) / 2; uiBoxes.backBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#7f8c8d'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial'; ctx.fillText('뒤로가기', canvas.width / 2, yPos + 32); }
-function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
-function drawPauseScreen() { drawObjects(); drawPlayer(); drawUI(false); ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText('일시정지', canvas.width / 2, canvas.height / 2); ctx.font = '24px Arial'; ctx.fillText('화면을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 50); }
-function drawUI(drawButton = true) {
-    ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 15, 30);
-    const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45; ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
-    const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT; ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
-    ctx.fillStyle = 'black'; ctx.font = '16px Arial'; ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16);
-    if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90); }
-    if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
-}
-
-// ✨ 메인 게임 루프를 async로 변경
-async function gameLoop(timestamp) {
-    if (!gameState) return;
-    if (!lastTime) lastTime = timestamp;
-    const deltaTime = timestamp - lastTime; lastTime = timestamp;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (gameState === 'startScreen') {
-        await drawStartScreen(); // await 추가
-    } else if (gameState === 'playing') {
-        updateObjects(deltaTime); movePlayer();
-        drawObjects(); drawPlayer(); drawUI();
-    } else if (gameState === 'paused') {
-        drawPauseScreen();
-    } else if (gameState === 'gameOver') {
-        drawGameOver();
-    }
-    
-    requestAnimationFrame(gameLoop);
-}
-
-function handleInteractionMove(e) { e.preventDefault(); if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; const pos = getEventPos(e); targetX = pos.x - player.width / 2; } }
-document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp);
-canvas.addEventListener('touchstart', handleInteractionStart); canvas.addEventListener('touchmove', handleInteractionMove);
-canvas.addEventListener('mousedown', handleInteractionStart); canvas.addEventListener('mousemove', handleInteractionMove);
-function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
-function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
-function drawPlayer() { ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height); }
-function drawObjects() { objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
-function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '24px Arial'; ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2); ctx.font = '20px Arial'; ctx.fillText('Tap to Save Score', canvas.width / 2, canvas.height / 2 + 40); }
-function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width) player.x = canvas.width - player.width; }
-function updateObjects(deltaTime) {
-    spawnTimer += deltaTime; gameSpeedMultiplier = 1 + (score * 0.02);
-    const BASE_SPAWN_INTERVAL = 450; const FEVER_SPAWN_INTERVAL = 120;
-    if (isFeverTime) {
-        feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
-        if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' }); spawnTimer = 0; }
-    } else {
-        if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
-            let type = 'good', color = 'red'; const rand = Math.random();
-            if (rand < 0.3) { type = 'bad'; color = 'black'; }
-            else if (rand < 0.45) { type = 'special'; color = '#2ecc71'; }
-            objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
-            spawnTimer = 0;
-        }
-    }
-    for (let i = objects.length - 1; i >= 0; i--) {
-        const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
-        if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
-        if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
-            if (obj.type === 'bad') { gameState = 'gameOver'; bgm.pause(); }
-            else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
-            else { score++; objects.splice(i, 1); }
-        }
-    }
-}
         
-resizeCanvas();
-gameLoop(0);
+        const characters = [ { id: 1, name: '블루', color: '#3498db', speed: 9 }, { id: 2, name: '그린', color: '#2ecc71', speed: 7 }, { id: 3, name: '퍼플', color: '#8e44ad', speed: 8 }];
+        let selectedCharacterId = 1;
+        let uiBoxes = {}; let startScreenState = 'main';
+        let player, objects, score, spawnTimer, targetX;
+        let gameState = 'startScreen';
+        let lastTime = 0; let gameSpeedMultiplier = 1;
+        let feverScore = 0, isFeverTime = false, feverTimer = 0;
+        const FEVER_DURATION = 5000; const FEVER_TRIGGER_COUNT = 10;
+        const BASE_SPAWN_INTERVAL = 450; const FEVER_SPAWN_INTERVAL = 120;
+
+        function init() {
+            const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
+            player = { width: 60, height: 20, x: canvas.width / 2 - 30, y: canvas.height - 60, speed: selectedCharacter.speed, color: selectedCharacter.color, dx: 0 };
+            targetX = player.x; objects = []; score = 0; spawnTimer = 0;
+            gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
+            gameState = 'playing';
+            bgm.currentTime = 0; bgm.play();
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            if (gameState === 'startScreen') drawStartScreen();
+            if (gameState === 'gameOver') drawGameOver();
+            if (gameState === 'paused') drawPauseScreen();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        
+        document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
+
+        function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+
+        async function handleInteractionStart(e) {
+            e.preventDefault();
+            const pos = getEventPos(e);
+            if (gameState === 'startScreen') {
+                if (startScreenState === 'main') {
+                    if (isInside(pos, uiBoxes.charSelectBtn)) startScreenState = 'characterSelect';
+                    else if (isInside(pos, uiBoxes.leaderboardBtn)) startScreenState = 'leaderboard';
+                    else if (isInside(pos, uiBoxes.startBtn)) init();
+                } else {
+                    if (startScreenState === 'characterSelect') { uiBoxes.characterBoxes.forEach(box => { if (isInside(pos, box)) selectedCharacterId = box.id; }); }
+                    if (isInside(pos, uiBoxes.backBtn)) startScreenState = 'main';
+                }
+            } else if (gameState === 'playing') {
+                if (isInside(pos, pauseButtonBox)) { gameState = 'paused'; bgm.pause(); }
+                else { player.dx = 0; targetX = pos.x - player.width / 2; }
+            } else if (gameState === 'paused') {
+                gameState = 'playing'; bgm.play();
+            } else if (gameState === 'gameOver') {
+                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
+                if (nickname && nickname.trim() !== '') {
+                    await saveToLeaderboard(score, nickname.trim());
+                }
+                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
+            }
+        }
+        
+        async function drawStartScreen() {
+            uiBoxes = {};
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (startScreenState === 'main') {
+                drawMainMenu();
+            } else if (startScreenState === 'leaderboard') {
+                await drawLeaderboardScreen();
+            } else if (startScreenState === 'characterSelect') {
+                drawCharacterSelectScreen();
+            }
+        }
+
+        function drawMainMenu() {
+            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('물체 피하기 게임', canvas.width / 2, canvas.height * 0.2);
+            const btnWidth = 250, btnHeight = 60, gap = 30; const btnX = (canvas.width - btnWidth) / 2, startY = canvas.height * 0.4;
+            uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
+            ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', canvas.width / 2, startY + 38);
+            uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
+            ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', canvas.width / 2, startY + btnHeight + gap + 38);
+            uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
+            ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38);
+        }
+
+        async function drawLeaderboardScreen() {
+            const leaderboard = await loadLeaderboard();
+            ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.2);
+            ctx.font = '20px Arial';
+            if (leaderboard.length === 0) { ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3); }
+            else { leaderboard.forEach((entry, index) => { const rankText = `${index + 1}. ${entry.name} - ${entry.score}`; ctx.fillText(rankText, canvas.width / 2, canvas.height * 0.3 + index * 30); }); }
+            drawBackButton(canvas.height * 0.85);
+        }
+
+        function drawCharacterSelectScreen() {
+            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('캐릭터를 선택하세요', canvas.width / 2, canvas.height * 0.2);
+            const boxWidth = 100, boxHeight = 100, gap = 20; const totalWidth = (boxWidth * characters.length) + (gap * (characters.length - 1));
+            let startX = (canvas.width - totalWidth) / 2;
+            uiBoxes.characterBoxes = [];
+            characters.forEach(char => {
+                const boxY = canvas.height * 0.4;
+                if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, boxWidth + 10, boxHeight + 10); }
+                ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, boxWidth, boxHeight);
+                ctx.fillStyle = '#2c3e50'; ctx.font = '20px Arial'; ctx.fillText(char.name, startX + boxWidth / 2, boxY + boxHeight + 30);
+                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: boxWidth, height: boxHeight });
+                startX += boxWidth + gap;
+            });
+            drawBackButton(canvas.height * 0.85);
+        }
+        function drawBackButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (canvas.width - btnWidth) / 2; uiBoxes.backBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#7f8c8d'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial'; ctx.fillText('뒤로가기', canvas.width / 2, yPos + 32); }
+        function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
+        function drawPauseScreen() { drawObjects(); drawPlayer(); drawUI(false); ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText('일시정지', canvas.width / 2, canvas.height / 2); ctx.font = '24px Arial'; ctx.fillText('화면을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 50); }
+        function drawUI(drawButton = true) {
+            ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 15, 30);
+            const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45; ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
+            const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT; ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
+            ctx.fillStyle = 'black'; ctx.font = '16px Arial'; ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16);
+            if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90); }
+            if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
+        }
+        
+        async function gameLoop(timestamp) {
+            if (!gameState) return; if (!lastTime) lastTime = timestamp; const deltaTime = timestamp - lastTime; lastTime = timestamp;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (gameState === 'startScreen') { await drawStartScreen(); }
+            else if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); drawObjects(); drawPlayer(); drawUI(); }
+            else if (gameState === 'paused') { drawPauseScreen(); }
+            else if (gameState === 'gameOver') { drawGameOver(); }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function handleInteractionMove(e) { e.preventDefault(); if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; const pos = getEventPos(e); targetX = pos.x - player.width / 2; } }
+        document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp);
+        canvas.addEventListener('touchstart', handleInteractionStart); canvas.addEventListener('touchmove', handleInteractionMove);
+        canvas.addEventListener('mousedown', handleInteractionStart); canvas.addEventListener('mousemove', handleInteractionMove);
+        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
+        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
+        function drawPlayer() { ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height); }
+        function drawObjects() { objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
+        function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '24px Arial'; ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2); ctx.font = '20px Arial'; ctx.fillText('Tap to Save Score', canvas.width / 2, canvas.height / 2 + 40); }
+        function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width) player.x = canvas.width - player.width; }
+        function updateObjects(deltaTime) {
+            spawnTimer += deltaTime; gameSpeedMultiplier = 1 + (score * 0.02);
+            if (isFeverTime) {
+                feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
+                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' }); spawnTimer = 0; }
+            } else {
+                if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
+                    let type = 'good', color = 'red'; const rand = Math.random();
+                    if (rand < 0.3) { type = 'bad'; color = 'black'; }
+                    else if (rand < 0.45) { type = 'special'; color = '#2ecc71'; }
+                    objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
+                    spawnTimer = 0;
+                }
+            }
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
+                if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
+                if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
+                    if (obj.type === 'bad') { gameState = 'gameOver'; bgm.pause(); }
+                    else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
+                    else { score++; objects.splice(i, 1); }
+                }
+            }
+        }
+        
+        resizeCanvas();
+        gameLoop(0);
+    </script>
+</body>
+</html>
