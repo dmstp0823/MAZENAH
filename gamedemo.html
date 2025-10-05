@@ -169,4 +169,61 @@
         }
         function drawBackButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (canvas.width - btnWidth) / 2; uiBoxes.backBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#7f8c8d'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial'; ctx.fillText('뒤로가기', canvas.width / 2, yPos + 32); }
         function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
-        function drawPauseScreen() { drawObjects(); drawPlayer(); drawUI(false); ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0
+        function drawPauseScreen() { drawObjects(); drawPlayer(); drawUI(false); ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText('일시정지', canvas.width / 2, canvas.height / 2); ctx.font = '24px Arial'; ctx.fillText('화면을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 50); }
+        function drawUI(drawButton = true) {
+            ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 15, 30);
+            const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45; ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
+            const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT; ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
+            ctx.fillStyle = 'black'; ctx.font = '16px Arial'; ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16);
+            if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90); }
+            if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
+        }
+        function gameLoop(timestamp) {
+            if (!gameState) return; if (!lastTime) lastTime = timestamp; const deltaTime = timestamp - lastTime; lastTime = timestamp;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (gameState === 'startScreen') { drawStartScreen(); }
+            else if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); drawObjects(); drawPlayer(); drawUI(); }
+            else if (gameState === 'paused') { drawPauseScreen(); }
+            else if (gameState === 'gameOver') { drawGameOver(); }
+            requestAnimationFrame(gameLoop);
+        }
+        function handleInteractionMove(e) { e.preventDefault(); if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; const pos = getEventPos(e); targetX = pos.x - player.width / 2; } }
+        document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp);
+        canvas.addEventListener('touchstart', handleInteractionStart); canvas.addEventListener('touchmove', handleInteractionMove);
+        canvas.addEventListener('mousedown', handleInteractionStart); canvas.addEventListener('mousemove', handleInteractionMove);
+        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
+        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
+        function drawPlayer() { ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height); }
+        function drawObjects() { objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
+        function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '24px Arial'; ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2); ctx.font = '20px Arial'; ctx.fillText('Tap to return to main menu', canvas.width / 2, canvas.height / 2 + 40); }
+        function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width) player.x = canvas.width - player.width; }
+        function updateObjects(deltaTime) {
+            spawnTimer += deltaTime; gameSpeedMultiplier = 1 + (score * 0.02);
+            if (isFeverTime) {
+                feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
+                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' }); spawnTimer = 0; }
+            } else {
+                if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
+                    let type = 'good', color = 'red'; const rand = Math.random();
+                    if (rand < 0.3) { type = 'bad'; color = 'black'; }
+                    else if (rand < 0.45) { type = 'special'; color = '#2ecc71'; }
+                    objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
+                    spawnTimer = 0;
+                }
+            }
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
+                if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
+                if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
+                    if (obj.type === 'bad') { gameState = 'gameOver'; bgm.pause(); }
+                    else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
+                    else { score++; objects.splice(i, 1); }
+                }
+            }
+        }
+        
+        resizeCanvas();
+        gameLoop(0);
+    </script>
+</body>
+</html>
