@@ -3,18 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>물체 잡기 (터치 이동)</title>
+    <title>물체 잡기 (최종)</title>
     <style>
-        /* 기본 여백 제거 및 스크롤바 숨기기 */
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #f0f0f0;
-        }
-        /* 캔버스가 화면에 꽉 차도록 설정 */
-        canvas {
-            display: block;
-        }
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
@@ -24,140 +16,126 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // --- 1. 화면 크기를 스마트폰에 꽉 채우기 ---
+        // --- 게임 상태 및 변수 설정 ---
+        let player, objects, score, gameState, spawnTimer;
+        let targetX; // 플레이어가 이동할 목표 X좌표
+
+        // --- 게임 초기화 및 재시작 함수 ---
+        function init() {
+            player = {
+                width: 60, height: 20,
+                x: canvas.width / 2 - 30,
+                y: canvas.height - 60,
+                speed: 8
+            };
+            
+            targetX = player.x;
+            objects = [];
+            score = 0;
+            spawnTimer = 0;
+            gameState = 'playing'; // 게임 상태: playing, gameOver
+        }
+
+        // --- 화면 크기 조절 ---
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            init(); // 화면 크기가 바뀌면 게임을 초기화
         }
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas(); // 페이지 로드 시 초기 사이즈 설정
-        // -----------------------------------------
 
-        const player = {
-            width: 60, // 플레이어 크기를 약간 키움
-            height: 20,
-            x: canvas.width / 2 - 30,
-            y: canvas.height - 50, // 화면 하단에 위치
-            speed: 8
-        };
-        
-        // 플레이어를 따라다닐 목표 지점 X좌표
-        let targetX = player.x;
-
-        const object = {
-            width: 25, // 물체 크기도 약간 키움
-            height: 25,
-            x: Math.random() * (canvas.width - 25),
-            y: 0,
-            speed: 4
-        };
-        
-        let score = 0;
-
-        // --- 2. 터치 및 마우스로 플레이어 이동시키기 ---
-        function getTouchX(e) {
-            if (e.touches && e.touches.length > 0) {
-                return e.touches[0].clientX; // 모바일 터치
-            }
-            return e.clientX; // 데스크탑 마우스
+        // --- 터치 및 마우스 이벤트 처리 ---
+        function getEventX(e) {
+            return e.touches ? e.touches[0].clientX : e.clientX;
         }
 
+        // 1. 화면 누르고 있을 때 이동
         function handleMoveStart(e) {
             e.preventDefault();
-            targetX = getTouchX(e) - player.width / 2; // 플레이어 중앙으로 타겟 설정
+            if (gameState === 'playing') {
+                targetX = getEventX(e) - player.width / 2;
+            } else if (gameState === 'gameOver') {
+                // 게임오버 화면에서 터치하면 재시작
+                init();
+            }
         }
 
         function handleMove(e) {
             e.preventDefault();
-            // 터치나 클릭이 진행 중일 때만 좌표를 계속 업데이트
-            if (e.buttons === 1 || (e.touches && e.touches.length > 0)) {
-                targetX = getTouchX(e) - player.width / 2;
+            if (gameState === 'playing' && (e.buttons === 1 || e.touches)) {
+                targetX = getEventX(e) - player.width / 2;
             }
         }
 
-        // 캔버스에 이벤트 리스너 추가
+        // 2. 화면에서 손을 떼면 정지
+        function handleMoveEnd(e) {
+            e.preventDefault();
+            if (gameState === 'playing') {
+                targetX = player.x; // 목표 지점을 현재 플레이어 위치로 설정해 멈추게 함
+            }
+        }
+
         canvas.addEventListener('touchstart', handleMoveStart);
         canvas.addEventListener('touchmove', handleMove);
+        canvas.addEventListener('touchend', handleMoveEnd);
         canvas.addEventListener('mousedown', handleMoveStart);
         canvas.addEventListener('mousemove', handleMove);
-        // --------------------------------------------
+        canvas.addEventListener('mouseup', handleMoveEnd);
 
+        // --- 그리기 함수들 ---
         function drawPlayer() {
             ctx.fillStyle = 'blue';
             ctx.fillRect(player.x, player.y, player.width, player.height);
         }
 
-        function drawObject() {
+        function drawObjects() {
             ctx.fillStyle = 'red';
-            ctx.fillRect(object.x, object.y, object.width, object.height);
+            objects.forEach(obj => {
+                ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            });
         }
         
         function drawScore() {
-            ctx.font = '24px Arial';
             ctx.fillStyle = 'black';
+            ctx.font = '24px Arial';
             ctx.fillText(`Score: ${score}`, 15, 30);
         }
-        
-        // --- 3. 플레이어를 부드럽게 목표 지점으로 이동 ---
+
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+            
+            ctx.font = '24px Arial';
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2);
+            
+            ctx.font = '20px Arial';
+            ctx.fillText('Tap to Restart', canvas.width / 2, canvas.height / 2 + 40);
+        }
+
+        // --- 로직 함수들 ---
         function movePlayer() {
-            // 플레이어의 현재 위치와 목표 지점의 차이 계산
             const dx = targetX - player.x;
-            
-            // 목표 지점에 거의 도달했으면 이동 중지
-            if (Math.abs(dx) < player.speed) {
-                player.x = targetX;
-            } else {
-                // 목표 지점 방향으로 speed만큼 이동
-                player.x += Math.sign(dx) * player.speed;
+            if (Math.abs(dx) > 1) { // 약간의 오차 범위를 둬서 부드럽게 멈춤
+                player.x += dx * 0.1; // 이전보다 더 부드럽게 이동
             }
-            
-            // 화면 밖으로 나가지 않도록 제한
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) {
                 player.x = canvas.width - player.width;
             }
         }
         
-        function moveObject() {
-            object.y += object.speed;
-            if (object.y > canvas.height) {
-                resetObject();
-            }
-        }
-
-        function resetObject() {
-            object.y = -object.height;
-            object.x = Math.random() * (canvas.width - object.width);
-        }
-
-        function checkCollision() {
-            if (
-                player.x < object.x + object.width &&
-                player.x + player.width > object.x &&
-                player.y < object.y + object.height &&
-                player.y + player.height > object.y
-            ) {
-                score++;
-                resetObject();
-            }
-        }
-
-        // 메인 게임 루프
-        function update() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            drawPlayer();
-            drawObject();
-            drawScore();
-            
-            movePlayer(); // 수정된 movePlayer 함수 호출
-            moveObject();
-            checkCollision();
-
-            requestAnimationFrame(update);
-        }
-
-        update();
-    </script>
-</body>
-</html>
+        // 3. 연속으로 물체 생성 및 이동
+        function updateObjects() {
+            // 일정 시간마다 새 물체 생성
+            spawnTimer++;
+            if (spawnTimer > 45) { // 45프레임(약 0.75초)마다 하나씩 생성
+                objects.push({
+                    x: Math.random() * (canvas.width - 25),
+                    y: -25,
+                    width: 25, height: 25,
+                    speed
