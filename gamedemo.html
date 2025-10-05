@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>물체 잡기 (시작 화면 추가)</title>
+    <title>나쁜 물체 피하기</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
-        canvas { display: block; }
+        canvas { display: block; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -16,47 +16,38 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // --- 게임 상태 및 변수 설정 ---
         let player, objects, score, spawnTimer;
         let targetX;
-        let gameState = 'startScreen'; // 게임 상태: startScreen, playing, gameOver
+        let gameState = 'startScreen';
 
-        // --- 게임 초기화 및 재시작 함수 ---
         function init() {
             player = {
                 width: 60, height: 20,
                 x: canvas.width / 2 - 30,
                 y: canvas.height - 60,
-                speed: 8
             };
-            
             targetX = player.x;
             objects = [];
             score = 0;
             spawnTimer = 0;
-            gameState = 'playing'; // 게임을 'playing' 상태로 변경
+            gameState = 'playing';
         }
 
-        // --- 화면 크기 조절 ---
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resizeCanvas);
 
-        // --- 터치 및 마우스 이벤트 처리 ---
         function getEventX(e) {
             return e.touches ? e.touches[0].clientX : e.clientX;
         }
 
         function handleInteractionStart(e) {
             e.preventDefault();
-            // 1. 시작 또는 게임오버 화면에서 터치하면 게임 시작/재시작
             if (gameState === 'startScreen' || gameState === 'gameOver') {
                 init();
-            } 
-            // 2. 게임 중일 때 터치하면 플레이어 이동
-            else if (gameState === 'playing') {
+            } else if (gameState === 'playing') {
                 targetX = getEventX(e) - player.width / 2;
             }
         }
@@ -70,9 +61,8 @@
 
         function handleInteractionEnd(e) {
             e.preventDefault();
-            if (gameState === 'playing') {
-                targetX = player.x;
-            }
+            // 손을 떼도 멈추지 않고 마지막 터치 지점으로 계속 이동
+            // targetX = player.x; // 이 줄을 주석 처리하거나 삭제
         }
 
         canvas.addEventListener('touchstart', handleInteractionStart);
@@ -83,75 +73,74 @@
         canvas.addEventListener('mouseup', handleInteractionEnd);
 
         // --- 그리기 함수들 ---
-        // 3. 시작 화면 그리기 함수 추가
         function drawStartScreen() {
-            ctx.fillStyle = '#3498db'; // 시작 화면 배경색
+            ctx.fillStyle = '#3498db';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             ctx.fillStyle = 'white';
             ctx.font = 'bold 40px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('물체 잡기 게임', canvas.width / 2, canvas.height / 2 - 40);
-            
+            ctx.fillText('나쁜 물체 피하기', canvas.width / 2, canvas.height / 2 - 40);
             ctx.font = '24px Arial';
             ctx.fillText('화면을 눌러 시작하세요', canvas.width / 2, canvas.height / 2 + 20);
         }
 
-        function drawPlayer() { /* ... 이전과 동일 ... */ 
+        function drawPlayer() {
             ctx.fillStyle = 'blue';
             ctx.fillRect(player.x, player.y, player.width, player.height);
         }
 
-        function drawObjects() { /* ... 이전과 동일 ... */ 
-            ctx.fillStyle = 'red';
+        function drawObjects() {
             objects.forEach(obj => {
+                ctx.fillStyle = obj.color; // 각 물체의 색상으로 그림
                 ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
             });
         }
-        
-        function drawScore() { /* ... 이전과 동일 ... */ 
+
+        function drawScore() {
             ctx.fillStyle = 'black';
             ctx.font = '24px Arial';
             ctx.textAlign = 'left';
             ctx.fillText(`Score: ${score}`, 15, 30);
         }
 
-        function drawGameOver() { /* ... 이전과 동일 ... */ 
+        function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             ctx.fillStyle = 'white';
             ctx.font = 'bold 40px Arial';
             ctx.textAlign = 'center';
             ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
-            
             ctx.font = '24px Arial';
             ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2);
-            
             ctx.font = '20px Arial';
             ctx.fillText('Tap to Restart', canvas.width / 2, canvas.height / 2 + 40);
         }
 
-        // --- 로직 함수들 (이전과 동일) ---
-        function movePlayer() { /* ... 이전과 동일 ... */ 
-            const dx = targetX - player.x;
-            if (Math.abs(dx) > 1) {
-                player.x += dx * 0.1;
-            }
+        // --- 로직 함수들 ---
+        // 1. 플레이어 이동 감도 개선
+        function movePlayer() {
+            // 목표 지점으로 플레이어를 직접 이동시켜 반응성을 높임
+            player.x = targetX;
+
+            // 화면 밖으로 나가지 않도록 제한
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) {
                 player.x = canvas.width - player.width;
             }
         }
-        
-        function updateObjects() { /* ... 이전과 동일 ... */ 
+
+        function updateObjects() {
             spawnTimer++;
-            if (spawnTimer > 45) {
+            if (spawnTimer > 40) { // 물체 생성 속도를 약간 높임
+                const isBad = Math.random() < 0.2; // 20% 확률로 '나쁜 물체' 생성
+                
                 objects.push({
                     x: Math.random() * (canvas.width - 25),
                     y: -25,
                     width: 25, height: 25,
-                    speed: 2 + Math.random() * 3
+                    speed: 2 + Math.random() * 3,
+                    type: isBad ? 'bad' : 'good', // 물체 타입 추가
+                    color: isBad ? 'black' : 'red' // 타입에 따른 색상 지정
                 });
                 spawnTimer = 0;
             }
@@ -159,26 +148,35 @@
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i];
                 obj.y += obj.speed;
+
+                // 2. 바닥에 닿은 물체는 게임오버 대신 그냥 제거
                 if (obj.y > canvas.height) {
-                    gameState = 'gameOver';
+                    objects.splice(i, 1);
+                    continue; // 다음 물체로 넘어감
                 }
+
+                // 3. 충돌 처리 규칙 변경
                 if (
                     player.x < obj.x + obj.width &&
                     player.x + player.width > obj.x &&
                     player.y < obj.y + obj.height &&
                     player.y + player.height > obj.y
                 ) {
-                    score++;
-                    objects.splice(i, 1);
+                    if (obj.type === 'bad') {
+                        // '나쁜 물체'를 받으면 게임오버
+                        gameState = 'gameOver';
+                    } else {
+                        // '좋은 물체'를 받으면 점수 상승 및 물체 제거
+                        score++;
+                        objects.splice(i, 1);
+                    }
                 }
             }
         }
-        
-        // --- 메인 게임 루프 ---
+
         function update() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 4. 게임 상태에 따라 다른 화면을 그림
             if (gameState === 'startScreen') {
                 drawStartScreen();
             } else if (gameState === 'playing') {
@@ -194,7 +192,6 @@
             requestAnimationFrame(update);
         }
 
-        // --- 게임 시작 ---
         resizeCanvas();
         update();
     </script>
