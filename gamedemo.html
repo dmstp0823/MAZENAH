@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>나쁜 물체 피하기</title>
+    <title>피버 타임! 물체 피하기</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
         canvas { display: block; cursor: pointer; }
@@ -16,94 +16,69 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        let player, objects, score, spawnTimer;
-        let targetX;
+        let player, objects, score, spawnTimer, targetX;
         let gameState = 'startScreen';
+        let lastTime = 0;
+        let gameSpeedMultiplier = 1;
+
+        // --- 1. 피버 타임 관련 변수 추가 ---
+        let feverScore = 0; // 특수 물체 카운트
+        let isFeverTime = false;
+        let feverTimer = 0;
+        const FEVER_DURATION = 5000; // 피버 타임 지속 시간 (5초)
+        const FEVER_TRIGGER_COUNT = 10; // 피버 타임 발동 조건
 
         function init() {
-            player = {
-                width: 60, height: 20,
-                x: canvas.width / 2 - 30,
-                y: canvas.height - 60,
-            };
+            player = { width: 60, height: 20, x: canvas.width / 2 - 30, y: canvas.height - 60 };
             targetX = player.x;
             objects = [];
             score = 0;
             spawnTimer = 0;
+            gameSpeedMultiplier = 1;
+            feverScore = 0; // 피버 점수 초기화
+            isFeverTime = false;
+            feverTimer = 0;
             gameState = 'playing';
         }
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            if(gameState === 'startScreen') drawStartScreen();
+            if(gameState === 'gameOver') drawGameOver();
         }
         window.addEventListener('resize', resizeCanvas);
 
-        function getEventX(e) {
-            return e.touches ? e.touches[0].clientX : e.clientX;
-        }
-
+        function getEventX(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
         function handleInteractionStart(e) {
             e.preventDefault();
-            if (gameState === 'startScreen' || gameState === 'gameOver') {
-                init();
-            } else if (gameState === 'playing') {
-                targetX = getEventX(e) - player.width / 2;
-            }
+            if (gameState === 'startScreen' || gameState === 'gameOver') init();
+            else if (gameState === 'playing') targetX = getEventX(e) - player.width / 2;
         }
-
         function handleInteractionMove(e) {
             e.preventDefault();
-            if (gameState === 'playing' && (e.buttons === 1 || e.touches)) {
-                targetX = getEventX(e) - player.width / 2;
-            }
+            if (gameState === 'playing' && (e.buttons === 1 || e.touches)) targetX = getEventX(e) - player.width / 2;
         }
-
-        function handleInteractionEnd(e) {
-            e.preventDefault();
-            // 손을 떼도 멈추지 않고 마지막 터치 지점으로 계속 이동
-            // targetX = player.x; // 이 줄을 주석 처리하거나 삭제
-        }
-
+        
         canvas.addEventListener('touchstart', handleInteractionStart);
         canvas.addEventListener('touchmove', handleInteractionMove);
-        canvas.addEventListener('touchend', handleInteractionEnd);
         canvas.addEventListener('mousedown', handleInteractionStart);
         canvas.addEventListener('mousemove', handleInteractionMove);
-        canvas.addEventListener('mouseup', handleInteractionEnd);
 
         // --- 그리기 함수들 ---
-        function drawStartScreen() {
+        function drawStartScreen() { /* 이전과 동일 */ 
             ctx.fillStyle = '#3498db';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'white';
             ctx.font = 'bold 40px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('나쁜 물체 피하기', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.fillText('피버! 물체 피하기', canvas.width / 2, canvas.height / 2 - 40);
             ctx.font = '24px Arial';
             ctx.fillText('화면을 눌러 시작하세요', canvas.width / 2, canvas.height / 2 + 20);
         }
-
-        function drawPlayer() {
-            ctx.fillStyle = 'blue';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-        }
-
-        function drawObjects() {
-            objects.forEach(obj => {
-                ctx.fillStyle = obj.color; // 각 물체의 색상으로 그림
-                ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-            });
-        }
-
-        function drawScore() {
-            ctx.fillStyle = 'black';
-            ctx.font = '24px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText(`Score: ${score}`, 15, 30);
-        }
-
-        function drawGameOver() {
+        function drawPlayer() { /* 이전과 동일 */ ctx.fillStyle = 'blue'; ctx.fillRect(player.x, player.y, player.width, player.height); }
+        function drawObjects() { /* 이전과 동일 */ objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
+        function drawGameOver() { /* 이전과 동일 */ 
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'white';
@@ -116,84 +91,94 @@
             ctx.fillText('Tap to Restart', canvas.width / 2, canvas.height / 2 + 40);
         }
 
-        // --- 로직 함수들 ---
-        // 1. 플레이어 이동 감도 개선
-        function movePlayer() {
-            // 목표 지점으로 플레이어를 직접 이동시켜 반응성을 높임
-            player.x = targetX;
+        // 2. 점수 및 피버 상태를 보여주는 UI 그리기 함수
+        function drawUI() {
+            // 점수 표시
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Score: ${score}`, 15, 30);
 
-            // 화면 밖으로 나가지 않도록 제한
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) {
-                player.x = canvas.width - player.width;
+            // 피버 게이지 표시
+            ctx.fillText(`Fever: ${feverScore} / ${FEVER_TRIGGER_COUNT}`, 15, 60);
+
+            if (isFeverTime) {
+                // 피버 타임 남은 시간 표시
+                ctx.fillStyle = 'orange';
+                ctx.font = 'bold 36px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50);
+                ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90);
             }
         }
 
-        function updateObjects() {
-            spawnTimer++;
-            if (spawnTimer > 40) { // 물체 생성 속도를 약간 높임
-                const isBad = Math.random() < 0.2; // 20% 확률로 '나쁜 물체' 생성
-                
-                objects.push({
-                    x: Math.random() * (canvas.width - 25),
-                    y: -25,
-                    width: 25, height: 25,
-                    speed: 2 + Math.random() * 3,
-                    type: isBad ? 'bad' : 'good', // 물체 타입 추가
-                    color: isBad ? 'black' : 'red' // 타입에 따른 색상 지정
-                });
-                spawnTimer = 0;
-            }
+        // --- 로직 함수들 ---
+        function movePlayer() { /* 이전과 동일 */ 
+            player.x = targetX;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+        }
 
+        function updateObjects(deltaTime) {
+            spawnTimer += deltaTime;
+            gameSpeedMultiplier = 1 + (score * 0.02);
+
+            // 3. 피버 타임 로직
+            if (isFeverTime) {
+                feverTimer -= deltaTime;
+                if (feverTimer <= 0) {
+                    isFeverTime = false; // 피버 타임 종료
+                }
+                // 피버 중에는 물체가 더 빨리, 많이 생성됨
+                if (spawnTimer > 150) { 
+                    objects.push({
+                        x: Math.random() * (canvas.width - 25), y: -25,
+                        width: 25, height: 25, speed: 200,
+                        type: 'good', color: 'red'
+                    });
+                    spawnTimer = 0;
+                }
+            } else {
+                // 일반 상태 로직
+                if (spawnTimer > 700) {
+                    let type = 'good';
+                    let color = 'red';
+                    const rand = Math.random();
+                    if (rand < 0.3) { // 30% 확률로 나쁜 물체
+                        type = 'bad'; color = 'black';
+                    } else if (rand < 0.45) { // 15% 확률로 특수 물체
+                        type = 'special'; color = '#2ecc71'; // 초록색
+                    }
+                    
+                    objects.push({
+                        x: Math.random() * (canvas.width - 25), y: -25,
+                        width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100,
+                        type: type, color: color
+                    });
+                    spawnTimer = 0;
+                }
+            }
+            
+            // 4. 충돌 처리 로직 수정
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i];
-                obj.y += obj.speed;
+                obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
 
-                // 2. 바닥에 닿은 물체는 게임오버 대신 그냥 제거
-                if (obj.y > canvas.height) {
-                    objects.splice(i, 1);
-                    continue; // 다음 물체로 넘어감
-                }
+                if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
 
-                // 3. 충돌 처리 규칙 변경
-                if (
-                    player.x < obj.x + obj.width &&
-                    player.x + player.width > obj.x &&
-                    player.y < obj.y + obj.height &&
-                    player.y + player.height > obj.y
-                ) {
+                if (player.x < obj.x + obj.width && player.x + player.width > obj.x &&
+                    player.y < obj.y + obj.height && player.y + player.height > obj.y) {
+                    
                     if (obj.type === 'bad') {
-                        // '나쁜 물체'를 받으면 게임오버
                         gameState = 'gameOver';
-                    } else {
-                        // '좋은 물체'를 받으면 점수 상승 및 물체 제거
+                    } else if (obj.type === 'special') {
+                        feverScore++;
+                        objects.splice(i, 1);
+                        if (feverScore >= FEVER_TRIGGER_COUNT) {
+                            isFeverTime = true;
+                            feverTimer = FEVER_DURATION;
+                            feverScore = 0;
+                        }
+                    } else { // 'good' 타입
                         score++;
                         objects.splice(i, 1);
-                    }
-                }
-            }
-        }
-
-        function update() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (gameState === 'startScreen') {
-                drawStartScreen();
-            } else if (gameState === 'playing') {
-                updateObjects();
-                movePlayer();
-                drawObjects();
-                drawPlayer();
-                drawScore();
-            } else if (gameState === 'gameOver') {
-                drawGameOver();
-            }
-
-            requestAnimationFrame(update);
-        }
-
-        resizeCanvas();
-        update();
-    </script>
-</body>
-</html>
