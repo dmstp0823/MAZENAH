@@ -1,1 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>떨어지는 물체 받기 게임</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid black;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
+        // 플레이어 설정
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 30,
+            width: 50,
+            height: 20,
+            speed: 5,
+            dx: 0
+        };
+
+        // 떨어지는 물체 설정
+        const object = {
+            x: Math.random() * (canvas.width - 20),
+            y: 0,
+            width: 20,
+            height: 20,
+            speed: 3
+        };
+
+        let score = 0;
+
+        // 키보드 이벤트 리스너
+        document.addEventListener('keydown', keyDown);
+        document.addEventListener('keyup', keyUp);
+
+        function keyDown(e) {
+            if (e.key === 'ArrowRight' || e.key === 'Right') {
+                player.dx = player.speed;
+            } else if (e.key === 'ArrowLeft' || e.key === 'Left') {
+                player.dx = -player.speed;
+            }
+        }
+
+        function keyUp(e) {
+            if (
+                e.key === 'ArrowRight' ||
+                e.key === 'Right' ||
+                e.key === 'ArrowLeft' ||
+                e.key === 'Left'
+            ) {
+                player.dx = 0;
+            }
+        }
+
+        // 플레이어 그리기
+        function drawPlayer() {
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        // 물체 그리기
+        function drawObject() {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(object.x, object.y, object.width, object.height);
+        }
+        
+        // 점수 그리기
+        function drawScore() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'black';
+            ctx.fillText(`Score: ${score}`, 10, 25);
+        }
+
+        // 플레이어 위치 업데이트
+        function movePlayer() {
+            player.x += player.dx;
+
+            // 벽 충돌 체크
+            if (player.x < 0) {
+                player.x = 0;
+            }
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+        
+        // 물체 위치 업데이트
+        function moveObject() {
+            object.y += object.speed;
+
+            // 바닥에 닿았을 때
+            if (object.y + object.height > canvas.height) {
+                resetObject();
+            }
+        }
+
+        // 물체 위치 리셋
+        function resetObject() {
+            object.y = 0;
+            object.x = Math.random() * (canvas.width - object.width);
+        }
+
+        // 충돌 감지
+        function checkCollision() {
+            if (
+                player.x < object.x + object.width &&
+                player.x + player.width > object.x &&
+                player.y < object.y + object.height &&
+                player.y + player.height > object.y
+            ) {
+                score++;
+                resetObject();
+            }
+        }
+
+        // 메인 게임 루프
+        function update() {
+            // 캔버스 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawPlayer();
+            drawObject();
+            drawScore();
+            
+            movePlayer();
+            moveObject();
+
+            checkCollision();
+
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>
