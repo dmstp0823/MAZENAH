@@ -182,3 +182,35 @@
                     } else { // 'good' 타입
                         score++;
                         objects.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        // --- 메인 게임 루프 ---
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'startScreen') {
+                drawStartScreen();
+            } else if (gameState === 'playing') {
+                updateObjects(deltaTime);
+                movePlayer();
+                drawObjects();
+                drawPlayer();
+                drawUI(); // 점수판 및 피버 UI 그리기
+            } else if (gameState === 'gameOver') {
+                drawGameOver();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        resizeCanvas();
+        gameLoop(0);
+    </script>
+</body>
+</html>
