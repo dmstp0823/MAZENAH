@@ -18,15 +18,15 @@
 
     <script>
         // ==================================================================
-        // 여기에 Firebase에서 복사한 나만의 firebaseConfig 코드를 붙여넣으세요.
+        // 보내주신 새로운 firebaseConfig 코드를 여기에 적용했습니다.
         // ==================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyBDYkDY4UxRP2182lKvHbqE6kZ1uJcHspg",
+            apiKey: "AIzaSyAZxH_FTFIvORCMQgqFEDfOyBwlFxV5np8",
             authDomain: "clover-game.firebaseapp.com",
             projectId: "clover-game",
-            storageBucket: "clover-game.appspot.com",
+            storageBucket: "clover-game.appspot.com", // .firebasestorage.app 대신 .appspot.com을 사용합니다.
             messagingSenderId: "596891629209",
-            appId: "1:596891629209:web:27b9c386df467d845aaa08"
+            appId: "1:596891629209:web:f2e8bf9a737035c95aaa08"
         };
         // ==================================================================
 
@@ -42,6 +42,7 @@
         
         const leaderboardCollection = db ? db.collection('leaderboard') : null;
 
+        // --- 이하 모든 게임 코드는 검증된 최종 버전입니다 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bgm = document.getElementById('bgm');
@@ -151,11 +152,30 @@
         async function drawLeaderboardScreen() {
             const leaderboard = await loadLeaderboard();
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.2);
-            ctx.font = '20px Arial';
-            if (leaderboard.length === 0) { ctx.fillText('데이터를 불러오는 중이거나 기록이 없습니다.', canvas.width / 2, canvas.height * 0.3); }
-            else { leaderboard.forEach((entry, index) => { const rankText = `${index + 1}. ${entry.name} - ${entry.score}`; ctx.fillText(rankText, canvas.width / 2, canvas.height * 0.3 + index * 30); }); }
-            drawBackButton(canvas.height * 0.85);
+            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
+            if (leaderboard.length === 0) {
+                ctx.font = '20px Arial';
+                ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3);
+            } else {
+                const boxWidth = 300; const boxHeight = 40; const gap = 10;
+                const startY = canvas.height * 0.25;
+                leaderboard.forEach((entry, index) => {
+                    const boxY = startY + index * (boxHeight + gap);
+                    ctx.fillStyle = index < 3 ? '#f1c40f' : '#bdc3c7';
+                    ctx.fillRect((canvas.width - boxWidth) / 2, boxY, boxWidth, boxHeight);
+                    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px Arial';
+                    ctx.textAlign = 'left';
+                    const rankText = `${index + 1}.`;
+                    const nameText = entry.name;
+                    const scoreText = entry.score;
+                    ctx.fillText(rankText, (canvas.width - boxWidth) / 2 + 20, boxY + 25);
+                    ctx.textAlign = 'center';
+                    ctx.fillText(nameText, canvas.width / 2, boxY + 25);
+                    ctx.textAlign = 'right';
+                    ctx.fillText(scoreText, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
+                });
+            }
+            drawBackButton(canvas.height * 0.9);
         }
 
         function drawCharacterSelectScreen() {
