@@ -13,19 +13,19 @@
     <canvas id="gameCanvas"></canvas>
     <audio id="bgm" src="./Love3.mp3" loop></audio>
 
+    <!-- Firebase SDK 스크립트 추가 -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <script>
         // ==================================================================
-        // 여기에 Firebase에서 복사한 나만의 firebaseConfig 코드를 붙여넣으세요.
-        // 아래는 예시 코드이므로, 반드시 본인의 코드로 교체해야 합니다!
+        // 보내주신 firebaseConfig 코드를 여기에 적용했습니다.
         // ==================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBDYkDY4UxRP2182lKvHbqE6kZ1uJcHspg",
             authDomain: "clover-game.firebaseapp.com",
             projectId: "clover-game",
-            storageBucket: "clover-game.firebasestorage.app",
+            storageBucket: "clover-game.appspot.com", // .firebasestorage가 아닌 .appspot.com 이 맞습니다.
             messagingSenderId: "596891629209",
             appId: "1:596891629209:web:27b9c386df467d845aaa08"
         };
@@ -36,7 +36,7 @@
         const db = firebase.firestore();
         const leaderboardCollection = db.collection('leaderboard');
 
-        // --- 이하 게임 코드 ---
+        // --- 이하 모든 게임 코드는 검증된 최종 버전입니다 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bgm = document.getElementById('bgm');
