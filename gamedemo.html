@@ -18,13 +18,13 @@
 
     <script>
         // ==================================================================
-        // 보내주신 새로운 firebaseConfig 코드를 여기에 적용했습니다.
+        // 보내주신 firebaseConfig 코드를 여기에 적용했습니다.
         // ==================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
             authDomain: "clovergame-e712f.firebaseapp.com",
             projectId: "clovergame-e712f",
-            storageBucket: "clovergame-e712f.appspot.com", // .firebasestorage.app 대신 .appspot.com을 사용합니다.
+            storageBucket: "clovergame-e712f.appspot.com",
             messagingSenderId: "525191060039",
             appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
         };
@@ -154,9 +154,19 @@
         }
 
         async function drawLeaderboardScreen() {
-            const leaderboard = await loadLeaderboard();
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
             ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
+            ctx.font = '20px Arial';
+            ctx.fillText('로딩 중...', canvas.width / 2, canvas.height * 0.3);
+            
+            const leaderboard = await loadLeaderboard();
+
+            ctx.fillStyle = '#ecf0f1';
+            ctx.fillRect(0, canvas.height * 0.2, canvas.width, canvas.height * 0.7);
+            
+            ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial';
+            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
+            
             if (leaderboard.length === 0) {
                 ctx.font = '20px Arial';
                 ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3);
@@ -219,7 +229,9 @@
         async function gameLoop(timestamp) {
             if (!gameState) return; if (!lastTime) lastTime = timestamp; const deltaTime = timestamp - lastTime; lastTime = timestamp;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (gameState === 'startScreen') { await drawStartScreen(); }
+            if (gameState === 'startScreen') {
+                await drawStartScreen();
+            }
             else if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); drawObjects(); drawPlayer(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
             else if (gameState === 'gameOver') { drawGameOver(); }
