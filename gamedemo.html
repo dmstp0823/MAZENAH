@@ -42,14 +42,31 @@
         const leaderboardCollection = db ? db.collection('leaderboard') : null;
 
         // --- 순위표 로직 (Firebase 연동) ---
-        async function loadLeaderboard() {
-            if (!leaderboardCollection) return [];
-            try {
-                const snapshot = await leaderboardCollection.orderBy('score', 'desc').limit(10).get();
-                const leaderboard = [];
-                snapshot.forEach(doc => { leaderboard.push(doc.data()); });
-                return leaderboard;
-            } catch (error) { console.error("순위표 로딩 오류: ", error); return []; }
+        
+        // ✨ 1. 순위표 데이터를 저장할 전역 변수를 만듭니다.
+        let cachedLeaderboard = null;
+
+        // ✨ 2. 기존 loadLeaderboard 함수를 실시간 감지 함수로 변경합니다.
+        // 이 함수는 게임 시작 시 한 번만 호출되며, 순위표에 변경이 생길 때마다 cachedLeaderboard를 자동으로 업데이트합니다.
+        function listenForLeaderboardUpdates() {
+            if (!leaderboardCollection) return;
+
+            leaderboardCollection.orderBy('score', 'desc').limit(10)
+                .onSnapshot(snapshot => {
+                    const leaderboard = [];
+                    snapshot.forEach(doc => {
+                        leaderboard.push(doc.data());
+                    });
+                    cachedLeaderboard = leaderboard; // 데이터가 도착하거나 변경되면 캐시를 갱신
+                    
+                    // 만약 순위표 화면을 보고 있는 중에 데이터가 바뀌면 화면을 실시간으로 다시 그려줍니다.
+                    if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
+                        drawStartScreen(); // drawStartScreen이 내부적으로 drawLeaderboardScreen을 호출
+                    }
+                }, error => {
+                    console.error("순위표 실시간 로딩 오류: ", error);
+                    cachedLeaderboard = []; // 오류 발생 시 빈 배열로 설정
+                });
         }
 
         async function saveToLeaderboard(newScore, nickname) {
@@ -126,13 +143,15 @@
             }
         }
         
-        async function drawStartScreen() {
+        // ✨ drawStartScreen의 async 제거
+        function drawStartScreen() {
             uiBoxes = {};
             ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (startScreenState === 'main') {
                 drawMainMenu();
             } else if (startScreenState === 'leaderboard') {
-                await drawLeaderboardScreen();
+                // await를 사용하지 않으므로, 이 함수도 async일 필요가 없습니다.
+                drawLeaderboardScreen();
             } else if (startScreenState === 'characterSelect') {
                 drawCharacterSelectScreen();
             }
@@ -153,40 +172,40 @@
             ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38);
         }
 
-        async function drawLeaderboardScreen() {
+        // ✨ 3. drawLeaderboardScreen 함수를 캐시된 데이터를 사용하도록 수정합니다.
+        // 더 이상 async/await가 필요 없습니다.
+        function drawLeaderboardScreen() {
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
             ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
-            ctx.font = '20px Arial';
-            ctx.fillText('로딩 중...', canvas.width / 2, canvas.height * 0.3);
             
-            const leaderboard = await loadLeaderboard();
-
-            ctx.fillStyle = '#ecf0f1';
-            ctx.fillRect(0, canvas.height * 0.2, canvas.width, canvas.height * 0.7);
-            
-            ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial';
-            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
-            
-            if (leaderboard.length === 0) {
+            // 캐시된 데이터를 사용해 즉시 화면을 그립니다.
+            if (cachedLeaderboard === null) {
+                // 아직 Firebase로부터 첫 데이터를 받지 못한 경우
+                ctx.font = '20px Arial';
+                ctx.fillText('로딩 중...', canvas.width / 2, canvas.height * 0.3);
+            } else if (cachedLeaderboard.length === 0) {
+                // 데이터는 받았지만, 순위가 비어있는 경우
                 ctx.font = '20px Arial';
                 ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3);
             } else {
+                // 정상적으로 순위를 그리는 경우
                 const boxWidth = 300; const boxHeight = 40; const gap = 10;
                 const startY = canvas.height * 0.25;
-                leaderboard.forEach((entry, index) => {
+                cachedLeaderboard.forEach((entry, index) => {
                     const boxY = startY + index * (boxHeight + gap);
                     ctx.fillStyle = index < 3 ? '#f1c40f' : '#bdc3c7';
                     ctx.fillRect((canvas.width - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px Arial';
+                    
                     ctx.textAlign = 'left';
-                    const rankText = `${index + 1}.`;
-                    const nameText = entry.name;
-                    const scoreText = entry.score;
-                    ctx.fillText(rankText, (canvas.width - boxWidth) / 2 + 20, boxY + 25);
+                    ctx.fillText(`${index + 1}.`, (canvas.width - boxWidth) / 2 + 20, boxY + 25);
+                    
                     ctx.textAlign = 'center';
-                    ctx.fillText(nameText, canvas.width / 2, boxY + 25);
+                    ctx.fillText(entry.name, canvas.width / 2, boxY + 25);
+
                     ctx.textAlign = 'right';
-                    ctx.fillText(scoreText, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
+                    ctx.fillText(entry.score, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
                 });
             }
             drawBackButton(canvas.height * 0.9);
@@ -226,11 +245,12 @@
             if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
         }
         
-        async function gameLoop(timestamp) {
+        // gameLoop의 async 제거
+        function gameLoop(timestamp) {
             if (!gameState) return; if (!lastTime) lastTime = timestamp; const deltaTime = timestamp - lastTime; lastTime = timestamp;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (gameState === 'startScreen') {
-                await drawStartScreen();
+                drawStartScreen();
             }
             else if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); drawObjects(); drawPlayer(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
@@ -275,6 +295,9 @@
         
         resizeCanvas();
         gameLoop(0);
+
+        // ✨ 4. 게임이 시작될 때 순위표 데이터 실시간 감지를 시작합니다.
+        listenForLeaderboardUpdates();
     </script>
 </body>
 </html>
