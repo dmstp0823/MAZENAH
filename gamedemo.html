@@ -18,7 +18,7 @@
 
     <script>
         // ==================================================================
-        // 이 부분은 테스트를 통과했으므로 수정하지 마세요.
+        // 여기에 Firebase에서 복사한 나만의 firebaseConfig 코드를 붙여넣으세요.
         // ==================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBDYkDY4UxRP2182lKvHbqE6kZ1uJcHspg",
@@ -28,19 +28,20 @@
             messagingSenderId: "596891629209",
             appId: "1:596891629209:web:27b9c386df467d845aaa08"
         };
-        
+        // ==================================================================
+
+        // Firebase 앱 초기화
         let db;
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
         } catch (e) {
             console.error("Firebase 초기화 오류:", e);
+            alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요.");
         }
+        
         const leaderboardCollection = db ? db.collection('leaderboard') : null;
-        // ==================================================================
 
-
-        // --- 이하 모든 게임 코드는 검증된 최종 버전입니다 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bgm = document.getElementById('bgm');
