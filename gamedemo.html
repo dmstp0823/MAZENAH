@@ -30,7 +30,6 @@
         };
         // ==================================================================
 
-        // Firebase 앱 초기화 및 Firestore 인스턴스 생성
         let db;
         try {
             firebase.initializeApp(firebaseConfig);
@@ -41,42 +40,38 @@
         }
         const leaderboardCollection = db ? db.collection('leaderboard') : null;
 
-        // --- 순위표 로직 (Firebase 연동) ---
-        
-        // ✨ 1. 순위표 데이터를 저장할 전역 변수를 만듭니다.
         let cachedLeaderboard = null;
 
-        // ✨ 2. 기존 loadLeaderboard 함수를 실시간 감지 함수로 변경합니다.
-        // 이 함수는 게임 시작 시 한 번만 호출되며, 순위표에 변경이 생길 때마다 cachedLeaderboard를 자동으로 업데이트합니다.
         function listenForLeaderboardUpdates() {
             if (!leaderboardCollection) return;
-
             leaderboardCollection.orderBy('score', 'desc').limit(10)
                 .onSnapshot(snapshot => {
                     const leaderboard = [];
                     snapshot.forEach(doc => {
                         leaderboard.push(doc.data());
                     });
-                    cachedLeaderboard = leaderboard; // 데이터가 도착하거나 변경되면 캐시를 갱신
-                    
-                    // 만약 순위표 화면을 보고 있는 중에 데이터가 바뀌면 화면을 실시간으로 다시 그려줍니다.
+                    cachedLeaderboard = leaderboard;
                     if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
-                        drawStartScreen(); // drawStartScreen이 내부적으로 drawLeaderboardScreen을 호출
+                        drawStartScreen();
                     }
                 }, error => {
                     console.error("순위표 실시간 로딩 오류: ", error);
-                    cachedLeaderboard = []; // 오류 발생 시 빈 배열로 설정
+                    cachedLeaderboard = [];
                 });
         }
 
-        async function saveToLeaderboard(newScore, nickname) {
+        // ✨ 변경됨: characterName 인자 추가 및 저장 로직 변경
+        async function saveToLeaderboard(newScore, nickname, characterName) {
             if (!leaderboardCollection) return;
             try {
-                await leaderboardCollection.add({ score: newScore, name: nickname });
+                await leaderboardCollection.add({ 
+                    score: newScore, 
+                    name: nickname,
+                    character: characterName // 캐릭터 이름 저장
+                });
             } catch (error) { console.error("순위표 저장 오류: ", error); }
         }
 
-        // --- 이하 게임 코드 ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bgm = document.getElementById('bgm');
@@ -138,19 +133,22 @@
                 gameState = 'playing'; bgm.play();
             } else if (gameState === 'gameOver') {
                 const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-                if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
+                if (nickname && nickname.trim() !== '') {
+                    // ✨ 변경됨: 캐릭터 이름을 찾아서 saveToLeaderboard 함수로 전달
+                    const character = characters.find(c => c.id === selectedCharacterId);
+                    const characterName = character ? character.name : '알 수 없음';
+                    await saveToLeaderboard(score, nickname.trim(), characterName);
+                }
                 gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
             }
         }
         
-        // ✨ drawStartScreen의 async 제거
         function drawStartScreen() {
             uiBoxes = {};
             ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (startScreenState === 'main') {
                 drawMainMenu();
             } else if (startScreenState === 'leaderboard') {
-                // await를 사용하지 않으므로, 이 함수도 async일 필요가 없습니다.
                 drawLeaderboardScreen();
             } else if (startScreenState === 'characterSelect') {
                 drawCharacterSelectScreen();
@@ -172,24 +170,19 @@
             ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38);
         }
 
-        // ✨ 3. drawLeaderboardScreen 함수를 캐시된 데이터를 사용하도록 수정합니다.
-        // 더 이상 async/await가 필요 없습니다.
+        // ✨ 변경됨: 캐릭터 색상과 닉네임을 함께 표시하도록 로직 수정
         function drawLeaderboardScreen() {
             ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
             ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
             
-            // 캐시된 데이터를 사용해 즉시 화면을 그립니다.
             if (cachedLeaderboard === null) {
-                // 아직 Firebase로부터 첫 데이터를 받지 못한 경우
                 ctx.font = '20px Arial';
                 ctx.fillText('로딩 중...', canvas.width / 2, canvas.height * 0.3);
             } else if (cachedLeaderboard.length === 0) {
-                // 데이터는 받았지만, 순위가 비어있는 경우
                 ctx.font = '20px Arial';
                 ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, canvas.height * 0.3);
             } else {
-                // 정상적으로 순위를 그리는 경우
                 const boxWidth = 300; const boxHeight = 40; const gap = 10;
                 const startY = canvas.height * 0.25;
                 cachedLeaderboard.forEach((entry, index) => {
@@ -198,14 +191,25 @@
                     ctx.fillRect((canvas.width - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px Arial';
                     
+                    const rankTextX = (canvas.width - boxWidth) / 2 + 20;
+                    const scoreTextX = (canvas.width + boxWidth) / 2 - 20;
+
                     ctx.textAlign = 'left';
-                    ctx.fillText(`${index + 1}.`, (canvas.width - boxWidth) / 2 + 20, boxY + 25);
+                    ctx.fillText(`${index + 1}.`, rankTextX, boxY + 25);
                     
-                    ctx.textAlign = 'center';
-                    ctx.fillText(entry.name, canvas.width / 2, boxY + 25);
+                    const character = characters.find(c => c.name === entry.character);
+                    const charColor = character ? character.color : '#7f8c8d';
+                    
+                    const charBoxSize = 18;
+                    const charBoxX = rankTextX + 35;
+                    ctx.fillStyle = charColor;
+                    ctx.fillRect(charBoxX, boxY + (boxHeight - charBoxSize) / 2, charBoxSize, charBoxSize);
+
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillText(entry.name, charBoxX + charBoxSize + 10, boxY + 25);
 
                     ctx.textAlign = 'right';
-                    ctx.fillText(entry.score, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
+                    ctx.fillText(entry.score, scoreTextX, boxY + 25);
                 });
             }
             drawBackButton(canvas.height * 0.9);
@@ -245,7 +249,6 @@
             if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
         }
         
-        // gameLoop의 async 제거
         function gameLoop(timestamp) {
             if (!gameState) return; if (!lastTime) lastTime = timestamp; const deltaTime = timestamp - lastTime; lastTime = timestamp;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -296,7 +299,6 @@
         resizeCanvas();
         gameLoop(0);
 
-        // ✨ 4. 게임이 시작될 때 순위표 데이터 실시간 감지를 시작합니다.
         listenForLeaderboardUpdates();
     </script>
 </body>
