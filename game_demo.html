@@ -6,7 +6,7 @@
     <title>온라인 순위 경쟁! 물체 피하기</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
-        canvas { display: block; cursor: pointer; }
+        canvas { display: block; cursor: pointer; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -38,6 +38,9 @@
         let db;
         let leaderboardCollection;
         
+        // ✨ 1. 실시간 순위표 데이터를 저장할 변수
+        let cachedLeaderboard = null;
+
         const characters = [
             { id: 1, name: '블루', color: '#3498db', speed: 9, imgSrc: './char1.png', img: null },
             { id: 2, name: '그린', color: '#2ecc71', speed: 7, imgSrc: './char2.png', img: null },
@@ -75,20 +78,38 @@
             } catch (e) { console.error("Firebase 초기화 오류:", e); alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요."); }
         }
 
-        async function loadLeaderboard() {
-            if (!leaderboardCollection) return [];
-            try {
-                const snapshot = await leaderboardCollection.orderBy('score', 'desc').limit(10).get();
-                const leaderboard = [];
-                snapshot.forEach(doc => { leaderboard.push(doc.data()); });
-                return leaderboard;
-            } catch (error) { console.error("순위표 로딩 오류: ", error); return []; }
+        // ✨ 2. 실시간으로 순위표를 감지하는 함수
+        function listenForLeaderboardUpdates() {
+            if (!leaderboardCollection) return;
+            leaderboardCollection.orderBy('score', 'desc').limit(10)
+                .onSnapshot(snapshot => {
+                    const leaderboard = [];
+                    snapshot.forEach(doc => {
+                        leaderboard.push(doc.data());
+                    });
+                    cachedLeaderboard = leaderboard; // 불러온 데이터를 캐시에 저장
+                    // 만약 현재 순위표 화면을 보고 있다면, 화면을 다시 그려서 업데이트
+                    if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
+                        drawStartScreen();
+                    }
+                }, error => {
+                    console.error("순위표 실시간 로딩 오류: ", error);
+                    cachedLeaderboard = []; // 오류 발생 시 빈 배열로 설정
+                });
         }
 
         async function saveToLeaderboard(newScore, nickname) {
             if (!leaderboardCollection) return;
-            try { await leaderboardCollection.add({ score: newScore, name: nickname }); }
-            catch (error) { console.error("순위표 저장 오류: ", error); }
+            try {
+                // ✨ 저장 데이터에 캐릭터 이름 추가
+                const character = characters.find(c => c.id === selectedCharacterId);
+                const characterName = character ? character.name : 'Unknown';
+                await leaderboardCollection.add({ 
+                    score: newScore, 
+                    name: nickname,
+                    character: characterName
+                });
+            } catch (error) { console.error("순위표 저장 오류: ", error); }
         }
 
         function loadImages() {
@@ -126,155 +147,108 @@
             bgm.currentTime = 0; bgm.play();
         }
 
-        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
-        function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
-        function drawPlayer() { if (player && player.img) { ctx.drawImage(player.img, player.x, player.y, player.width, player.height); } }
-        function drawObjects() { objects.forEach(obj => { ctx.fillStyle = obj.color; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); }); }
-        
-        function drawConfirmButton(yPos) {
-            const btnWidth = 150, btnHeight = 50;
-            const btnX = (canvas.width - btnWidth) / 2;
-            uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#2980b9'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial';
-            ctx.fillText('확인', canvas.width / 2, yPos + 32);
+        // ✨ 3. 고화질(레티나) 디스플레이 대응 함수
+        function setupCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            // 리사이즈 될 때마다 다시 그려줌
+            if (gameState !== 'loading') {
+                gameLoop(performance.now());
+            }
         }
         
-        // ✨ 순위표 그리기 함수 (보내주신 로직 기반으로 수정)
-        async function drawLeaderboardScreen() {
-            // 1. 화면 초기화 및 제목, 로딩 메시지 그리기
-            ctx.fillStyle = '#ecf0f1';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // (기존 resizeCanvas 대신 setupCanvas 사용)
+        
+        function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+        function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
+        
+        // ✨ 4. 순위표 그리기 함수 수정 (캐시 데이터 사용)
+        function drawLeaderboardScreen() {
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
-            ctx.font = '20px Arial';
-            ctx.fillText('순위표를 불러오는 중...', canvas.width / 2, canvas.height * 0.3);
+            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, 50);
 
-            // 2. 비동기 데이터 로딩
-            const leaderboard = await loadLeaderboard();
-            
-            // 3. 로딩 메시지를 지우고 순위 데이터 표시
-            ctx.fillStyle = '#ecf0f1'; // 배경색으로 덮어서 로딩 메시지 지우기
-            ctx.fillRect(0, canvas.height * 0.2, canvas.width, canvas.height * 0.2);
-            
-            // 타이틀 다시 그리기
-            ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial';
-            ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, canvas.height * 0.15);
-
-            const listStartY = canvas.height * 0.25;
-            const listHeight = canvas.height - listStartY - 100;
+            const listStartY = 100;
+            const listHeight = canvas.height - 200;
             const boxWidth = 300, boxHeight = 40, gap = 10;
-            leaderboardTotalHeight = leaderboard.length * (boxHeight + gap) - gap;
-
-            const maxScroll = 0;
-            const minScroll = -(leaderboardTotalHeight - listHeight);
-            if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll;
-            if (leaderboardScrollY < minScroll && leaderboardTotalHeight > listHeight) leaderboardScrollY = minScroll;
             
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(0, listStartY, canvas.width, listHeight);
-            ctx.clip();
-
-            if (leaderboard.length === 0) {
+            if (cachedLeaderboard === null) {
+                ctx.font = '20px Arial';
+                ctx.fillText('로딩 중...', canvas.width / 2, listStartY + 50);
+            } else if (cachedLeaderboard.length === 0) {
                 ctx.font = '20px Arial';
                 ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, listStartY + 50);
             } else {
-                leaderboard.forEach((entry, index) => {
+                leaderboardTotalHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
+                const maxScroll = 0;
+                const minScroll = -(leaderboardTotalHeight - listHeight);
+                if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll;
+                if (leaderboardScrollY < minScroll && leaderboardTotalHeight > listHeight) leaderboardScrollY = minScroll;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, listStartY, canvas.width, listHeight);
+                ctx.clip();
+
+                cachedLeaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     ctx.fillStyle = index < 3 ? '#f1c40f' : '#bdc3c7';
-                    ctx.fillRect((canvas.width - boxWidth) / 2, boxY, boxWidth, boxHeight);
+                    ctx.fillRect((canvas.width / 2) - (boxWidth / 2), boxY, boxWidth, boxHeight);
+                    
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px Arial';
+                    
+                    const rankTextX = (canvas.width / 2) - (boxWidth / 2) + 20;
+                    
+                    // 캐릭터 색상 박스 그리기
+                    const character = characters.find(c => c.name === entry.character);
+                    const charColor = character ? character.color : '#7f8c8d';
+                    const charBoxSize = 18;
+                    const charBoxX = rankTextX + 35;
+                    ctx.fillStyle = charColor;
+                    ctx.fillRect(charBoxX, boxY + (boxHeight - charBoxSize) / 2, charBoxSize, charBoxSize);
+                    
+                    ctx.fillStyle = '#2c3e50';
                     ctx.textAlign = 'left';
-                    ctx.fillText(`${index + 1}.`, (canvas.width - boxWidth) / 2 + 20, boxY + 25);
-                    ctx.textAlign = 'center';
-                    ctx.fillText(entry.name, canvas.width / 2, boxY + 25);
+                    ctx.fillText(`${index + 1}.`, rankTextX, boxY + 25);
+                    ctx.fillText(entry.name, charBoxX + charBoxSize + 10, boxY + 25);
+                    
                     ctx.textAlign = 'right';
-                    ctx.fillText(entry.score, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
+                    ctx.fillText(entry.score, (canvas.width / 2) + (boxWidth / 2) - 20, boxY + 25);
                 });
+                ctx.restore();
             }
-            ctx.restore();
-            drawConfirmButton(canvas.height * 0.9); // 뒤로가기 대신 확인 버튼
-        }
-
-        function drawCharacterSelectScreen() {
-            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('캐릭터를 선택하세요', canvas.width / 2, canvas.height * 0.2);
-            const displayCharSize = 100; const gap = 20;
-            const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
-            let startX = (canvas.width - totalWidth) / 2;
-            uiBoxes.characterBoxes = [];
-            characters.forEach(char => {
-                const boxY = canvas.height * 0.4;
-                let imgDrawWidth = displayCharSize; let imgDrawHeight = displayCharSize;
-                if (char.originalWidth && char.originalHeight) {
-                    const aspectRatio = char.originalWidth / char.originalHeight;
-                    if (aspectRatio > 1) { imgDrawHeight = displayCharSize / aspectRatio; }
-                    else { imgDrawWidth = displayCharSize * aspectRatio; }
-                }
-                const imgDrawX = startX + (displayCharSize - imgDrawWidth) / 2;
-                const imgDrawY = boxY + (displayCharSize - imgDrawHeight) / 2;
-                if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, displayCharSize + 10, displayCharSize + 10); }
-                ctx.fillStyle = '#ecf0f1'; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize);
-                if (char.img) { ctx.drawImage(char.img, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
-                else { ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); }
-                ctx.fillStyle = '#2c3e50'; ctx.font = '20px Arial';
-                ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
-                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
-                startX += displayCharSize + gap;
-            });
-            drawConfirmButton(canvas.height * 0.85);
-        }
-
-        function drawMainMenu() {
-            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('물체 피하기 게임', canvas.width / 2, canvas.height * 0.2);
-            const btnWidth = 250, btnHeight = 60, gap = 30;
-            const btnX = (canvas.width - btnWidth) / 2, startY = canvas.height * 0.4;
-            uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', canvas.width / 2, startY + 38);
-            uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', canvas.width / 2, startY + btnHeight + gap + 38);
-            uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38);
+            drawConfirmButton(canvas.height - 80);
         }
         
-        async function drawStartScreen() {
-            uiBoxes = {};
-            if (startScreenState === 'main') {
-                drawMainMenu();
-            } else if (startScreenState === 'leaderboard') {
-                await drawLeaderboardScreen();
-            } else if (startScreenState === 'characterSelect') {
-                drawCharacterSelectScreen();
-            }
-        }
-        
+        // (나머지 그리기 함수들은 이전과 동일)
+        function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (canvas.width / 2) - (btnWidth / 2); uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#2980b9'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'; ctx.fillText('확인', canvas.width / 2, yPos + 32); }
+        function drawCharacterSelectScreen() { ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center'; ctx.fillText('캐릭터를 선택하세요', canvas.width / 2, canvas.height * 0.2); const displayCharSize = 100; const gap = 20; const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1)); let startX = (canvas.width - totalWidth) / 2; uiBoxes.characterBoxes = []; characters.forEach(char => { const boxY = canvas.height * 0.4; let imgDrawWidth = displayCharSize; let imgDrawHeight = displayCharSize; if (char.originalWidth && char.originalHeight) { const aspectRatio = char.originalWidth / char.originalHeight; if (aspectRatio > 1) { imgDrawHeight = displayCharSize / aspectRatio; } else { imgDrawWidth = displayCharSize * aspectRatio; } } const imgDrawX = startX + (displayCharSize - imgDrawWidth) / 2; const imgDrawY = boxY + (displayCharSize - imgDrawHeight) / 2; if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, displayCharSize + 10, displayCharSize + 10); } ctx.fillStyle = '#ecf0f1'; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); if (char.img) { ctx.drawImage(char.img, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); } else { ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); } ctx.fillStyle = '#2c3e50'; ctx.font = '20px Arial'; ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30); uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize }); startX += displayCharSize + gap; }); drawConfirmButton(canvas.height * 0.85); }
+        function drawMainMenu() { ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText('물체 피하기 게임', canvas.width / 2, canvas.height * 0.2); const btnWidth = 250, btnHeight = 60, gap = 30; const btnX = (canvas.width - btnWidth) / 2, startY = canvas.height * 0.4; uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', canvas.width / 2, startY + 38); uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.fillText('순위 보기', canvas.width / 2, startY + btnHeight + gap + 38); uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / 2, startY + (btnHeight + gap) * 2 + 38); }
+        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } }
         function drawPauseScreen() { drawObjects(); drawPlayer(); drawUI(false); ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center'; ctx.fillText('일시정지', canvas.width / 2, canvas.height / 2); ctx.font = '24px Arial'; ctx.fillText('화면을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 50); }
         function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'white'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40); ctx.font = '24px Arial'; ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2); ctx.font = '20px Arial'; ctx.fillText('Tap to Save Score', canvas.width / 2, canvas.height / 2 + 40); }
-        function drawUI(drawButton = true) { ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 15, 30); const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45; ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight); const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT; ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight); ctx.fillStyle = 'black'; ctx.font = '16px Arial'; ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16); if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90); } if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); } }
-        function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width) player.x = canvas.width - player.width; }
+        function drawUI(drawButton = true) { ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 15, 30); const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45; ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight); const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT; ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight); ctx.fillStyle = 'black'; ctx.font = '16px Arial'; ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16); if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, canvas.width / 2, 50); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, canvas.width / 2, 90); } if (drawButton) { const btnSize = 40, margin = 15; const btnX = canvas.width / devicePixelRatio - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); } }
+        function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width / devicePixelRatio) player.x = canvas.width / devicePixelRatio - player.width; }
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; gameSpeedMultiplier = 1 + (score * 0.01);
             if (isFeverTime) {
                 feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
-                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' }); spawnTimer = 0; }
+                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (canvas.width / devicePixelRatio - 25), y: -25, width: 25, height: 25, speed: 200, type: 'good', color: 'red' }); spawnTimer = 0; }
             } else {
                 if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
                     let type = 'good', color = 'red'; const rand = Math.random();
                     if (rand < 0.3) { type = 'bad'; color = 'black'; }
                     else if (rand < 0.45) { type = 'special'; color = '#2ecc71'; }
-                    objects.push({ x: Math.random() * (canvas.width - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
+                    objects.push({ x: Math.random() * (canvas.width / devicePixelRatio - 25), y: -25, width: 25, height: 25, speed: (1.5 + Math.random() * 2) * 100, type: type, color: color });
                     spawnTimer = 0;
                 }
             }
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
-                if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
+                if (obj.y > canvas.height / devicePixelRatio) { objects.splice(i, 1); continue; }
                 if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
                     if (obj.type === 'bad') { gameState = 'gameOver'; bgm.pause(); }
                     else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
@@ -282,7 +256,6 @@
                 }
             }
         }
-        
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
@@ -309,19 +282,7 @@
                 gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
             }
         }
-        
-        function handleInteractionMove(e) {
-            e.preventDefault();
-            const pos = getEventPos(e);
-            if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) {
-                const deltaY = pos.y - lastTouchY;
-                leaderboardScrollY += deltaY;
-                lastTouchY = pos.y;
-            } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) {
-                player.dx = 0; targetX = pos.x - player.width / 2;
-            }
-        }
-        
+        function handleInteractionMove(e) { e.preventDefault(); const pos = getEventPos(e); if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) { const deltaY = pos.y - lastTouchY; leaderboardScrollY += deltaY; lastTouchY = pos.y; } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; targetX = pos.x - player.width / 2; } }
         function handleInteractionEnd(e) { isDragging = false; }
         function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
         function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
@@ -330,14 +291,15 @@
         async function gameLoop(timestamp) {
             if (gameState === 'loading') {
                 ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
-                ctx.fillText('로딩 중...', canvas.width / 2, canvas.height / 2);
+                ctx.fillText('로딩 중...', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio / 2);
                 requestAnimationFrame(gameLoop);
                 return;
             }
             if (!lastTime) lastTime = timestamp;
-            const deltaTime = timestamp - lastTime; lastTime = timestamp;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (gameState === 'startScreen') { await drawStartScreen(); }
+            if (gameState === 'startScreen') { drawStartScreen(); }
             else if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); drawObjects(); drawPlayer(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
             else if (gameState === 'gameOver') { drawGameOver(); }
@@ -345,7 +307,7 @@
         }
 
         // --- 이벤트 리스너 및 게임 시작점 ---
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', setupCanvas);
         document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
@@ -359,7 +321,8 @@
 
         initializeFirebase();
         bgm.volume = 0.5;
-        resizeCanvas();
+        setupCanvas();
+        listenForLeaderboardUpdates(); // 실시간 감지 시작
         loadImages().then(() => {
             gameState = 'startScreen';
             gameLoop(0);
