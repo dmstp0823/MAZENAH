@@ -18,15 +18,15 @@
 
     <script>
         // ==================================================================
-        // 여기에 Firebase에서 복사한 나만의 firebaseConfig 코드를 붙여넣으세요.
+        // 보내주신 firebaseConfig 코드를 여기에 적용했습니다.
         // ==================================================================
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
+            authDomain: "clovergame-e712f.firebaseapp.com",
+            projectId: "clovergame-e712f",
+            storageBucket: "clovergame-e712f.appspot.com",
+            messagingSenderId: "525191060039",
+            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
         };
         // ==================================================================
 
@@ -47,7 +47,7 @@
         const bgm = document.getElementById('bgm');
         bgm.volume = 0.5;
 
-        // --- 1. 캐릭터 데이터에 이미지 경로 추가 ---
+        // --- 캐릭터 데이터에 이미지 경로 추가 ---
         const characters = [
             { id: 1, name: '블루', color: '#3498db', speed: 9, imgSrc: './char1.png', img: null },
             { id: 2, name: '그린', color: '#2ecc71', speed: 7, imgSrc: './char2.png', img: null },
@@ -58,7 +58,7 @@
         let uiBoxes = {};
         let startScreenState = 'main'; 
 
-        // --- 2. 순위표 스크롤을 위한 변수 추가 ---
+        // 순위표 스크롤을 위한 변수
         let leaderboardScrollY = 0;
         let leaderboardTotalHeight = 0;
         let isDragging = false;
@@ -76,7 +76,7 @@
         const FEVER_SPAWN_INTERVAL = 120;
         let pauseButtonBox = {};
 
-        // --- 3. 이미지 미리 불러오기 함수 ---
+        // 이미지 미리 불러오기 함수
         function loadImages() {
             let promises = characters.map(char => {
                 return new Promise((resolve, reject) => {
@@ -92,9 +92,9 @@
         function init() {
             const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
             player = {
-                width: 60, height: 60, // 이미지 크기에 맞게 조절
+                width: 60, height: 60,
                 x: canvas.width / 2 - 30,
-                y: canvas.height - 120, // ✨ 캐릭터 인식 위치 위로 조정
+                y: canvas.height - 120, // 캐릭터 위치 위로 조정
                 speed: selectedCharacter.speed,
                 img: selectedCharacter.img, // 캐릭터 이미지
                 dx: 0
@@ -107,14 +107,12 @@
             bgm.play();
         }
         
-        // --- 4. 플레이어 그리기 함수 수정 (이미지 사용) ---
         function drawPlayer() {
             if (player && player.img) {
                 ctx.drawImage(player.img, player.x, player.y, player.width, player.height);
             }
         }
         
-        // --- 5. 순위표 스크롤 및 UI 수정 ---
         async function drawLeaderboardScreen() {
             const leaderboard = await loadLeaderboard();
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
@@ -131,7 +129,6 @@
             if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll;
             if (leaderboardScrollY < minScroll && leaderboardTotalHeight > listHeight) leaderboardScrollY = minScroll;
             
-            // 스크롤 영역 클리핑 (벗어나면 안보이게)
             ctx.save();
             ctx.beginPath();
             ctx.rect(0, listStartY, canvas.width, listHeight);
@@ -156,7 +153,6 @@
             }
             ctx.restore();
 
-            // '확인' 버튼으로 변경
             drawConfirmButton(canvas.height - 80);
         }
 
@@ -172,7 +168,6 @@
                 const boxY = canvas.height * 0.4;
                 if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, boxWidth + 10, boxHeight + 10); }
                 
-                // 캐릭터 사각형 대신 이미지 그리기
                 if (char.img) {
                     ctx.drawImage(char.img, startX, boxY, boxWidth, boxHeight);
                 } else {
@@ -197,59 +192,17 @@
             ctx.fillText('확인', canvas.width / 2, yPos + 32);
         }
         
-        // --- 6. 스크롤 이벤트 핸들러 추가 ---
         function handleWheel(e) {
             if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
                 e.preventDefault();
                 leaderboardScrollY -= e.deltaY * 0.5;
             }
         }
-
-        async function handleInteractionStart(e) {
-            e.preventDefault();
-            const pos = getEventPos(e);
-            if (gameState === 'startScreen') {
-                if (startScreenState === 'main') {
-                    // ... (메인 메뉴 로직)
-                } else {
-                    if (startScreenState === 'characterSelect') {
-                        // ... (캐릭터 선택 로직)
-                    }
-                    // 확인 버튼 클릭 시 메인으로
-                    if (isInside(pos, uiBoxes.confirmBtn)) {
-                        startScreenState = 'main';
-                        leaderboardScrollY = 0; // 스크롤 위치 초기화
-                    }
-                    // 순위표 화면에서 터치 시작 (스크롤용)
-                    if (startScreenState === 'leaderboard') {
-                        isDragging = true;
-                        lastTouchY = pos.y;
-                    }
-                }
-            } // ... (이하 다른 게임 상태 로직)
-        }
-
-        function handleInteractionMove(e) {
-            e.preventDefault();
-            const pos = getEventPos(e);
-            if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) {
-                const deltaY = pos.y - lastTouchY;
-                leaderboardScrollY += deltaY;
-                lastTouchY = pos.y;
-            } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) {
-                // ... (게임 플레이 중 이동 로직)
-            }
-        }
         
-        function handleInteractionEnd(e) {
-            isDragging = false;
-        }
-
         // -------------------------------------------------------------------
         // 아래는 편의를 위해 전체 코드(수정되지 않은 부분 포함)를 다시 첨부합니다.
         // -------------------------------------------------------------------
         
-        // --- 나머지 모든 함수들 (수정 없음) ---
         async function loadLeaderboard() { if (!leaderboardCollection) return []; try { const snapshot = await leaderboardCollection.orderBy('score', 'desc').limit(10).get(); const leaderboard = []; snapshot.forEach(doc => { leaderboard.push(doc.data()); }); return leaderboard; } catch (error) { console.error("순위표 로딩 오류: ", error); return []; } }
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { await leaderboardCollection.add({ score: newScore, name: nickname }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
         function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -293,6 +246,7 @@
                 player.dx = 0; targetX = pos.x - player.width / 2;
             }
         }
+        function handleInteractionEnd(e) { isDragging = false; }
         canvas.addEventListener('wheel', handleWheel);
         canvas.addEventListener('touchend', handleInteractionEnd);
         canvas.addEventListener('mouseup', handleInteractionEnd);
@@ -315,7 +269,6 @@
             else if (gameState === 'gameOver') { drawGameOver(); }
             requestAnimationFrame(gameLoop);
         }
-        function handleInteractionMove(e) { e.preventDefault(); if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; const pos = getEventPos(e); targetX = pos.x - player.width / 2; } }
         document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp);
         canvas.addEventListener('touchstart', handleInteractionStart); canvas.addEventListener('touchmove', handleInteractionMove);
         canvas.addEventListener('mousedown', handleInteractionStart); canvas.addEventListener('mousemove', handleInteractionMove);
