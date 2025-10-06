@@ -263,7 +263,6 @@
             drawConfirmButton(scaledHeight * 0.9);
         }
         
-        // ✨ 캐릭터 선택 화면 UI 재배치
         function drawCharacterSelectScreen() {
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
@@ -275,7 +274,6 @@
             const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
             let startX = (scaledWidth - totalWidth) / 2;
             
-            // 캐릭터 박스를 화면 중앙에 위치
             const boxY = (scaledHeight - displayCharSize) / 2 - 50;
             uiBoxes.characterBoxes = [];
 
@@ -300,7 +298,6 @@
             drawConfirmButton(scaledHeight * 0.8);
         }
 
-        // ✨ 메인 메뉴 UI 그리기 함수 재배치
         function drawMainMenu() {
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
@@ -314,7 +311,11 @@
             const gap = btnHeight * 0.5;
             const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2);
             const btnX = (scaledWidth - btnWidth) / 2;
-            let startY = (scaledHeight - totalBtnBlockHeight) * 0.6; // 버튼 블록을 약간 아래로 이동
+            let startY = (scaledHeight - totalBtnBlockHeight) * 0.6; 
+
+            if (startY < scaledHeight * 0.3) {
+                startY = scaledHeight * 0.3;
+            }
 
             const btnFontSize = Math.min(btnHeight * 0.4, 24);
             ctx.font = `bold ${btnFontSize}px Arial`;
