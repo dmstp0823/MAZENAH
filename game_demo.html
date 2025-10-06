@@ -67,7 +67,6 @@
         const FEVER_SPAWN_INTERVAL = 120;
         let pauseButtonBox = {};
         let devicePixelRatio = window.devicePixelRatio || 1;
-        let animationFrameId; // gameLoop ID 저장을 위한 변수
 
         // --- 함수 정의 ---
         
@@ -150,12 +149,15 @@
         function setupCanvas() {
             devicePixelRatio = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * devicePixelRatio;
-            canvas.height = rect.height * devicePixelRatio;
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-            drawCurrentState();
+            if (canvas.width !== rect.width * devicePixelRatio || canvas.height !== rect.height * devicePixelRatio) {
+                canvas.width = rect.width * devicePixelRatio;
+                canvas.height = rect.height * devicePixelRatio;
+                ctx.scale(devicePixelRatio, devicePixelRatio);
+                drawCurrentState(); // 크기가 변경될 때만 다시 그림
+            }
         }
 
+        // 모든 그리기 작업을 통합하는 함수
         function drawCurrentState() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (gameState === 'loading') {
@@ -413,23 +415,30 @@
         
         function gameLoop(timestamp) {
             if (!gameState) return;
+            cancelAnimationFrame(animationFrameId); // 기존 루프 중지
+            
             if (gameState === 'loading') {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
                 ctx.fillText('로딩 중...', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio / 2);
                 animationFrameId = requestAnimationFrame(gameLoop);
                 return;
             }
+
             if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            
             if (gameState === 'startScreen') {
                 drawStartScreen();
             } else if (gameState === 'playing') {
-                updateObjects(deltaTime); movePlayer();
-                drawObjects(); drawPlayer(); drawUI();
+                updateObjects(deltaTime);
+                movePlayer();
+                drawObjects();
+                drawPlayer();
+                drawUI();
             } else if (gameState === 'paused') {
                 drawPauseScreen();
             } else if (gameState === 'gameOver') {
@@ -458,9 +467,6 @@
         listenForLeaderboardUpdates();
         loadImages().then(() => {
             gameState = 'startScreen';
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
             gameLoop(0);
         }).catch(error => {
             console.error(error);
