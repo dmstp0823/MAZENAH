@@ -67,7 +67,7 @@
         const FEVER_SPAWN_INTERVAL = 120;
         let pauseButtonBox = {};
         let devicePixelRatio = window.devicePixelRatio || 1;
-        let animationFrameId; // ✨ animationFrameId 변수 선언
+        let animationFrameId;
 
         // --- 함수 정의 ---
         
@@ -159,8 +159,7 @@
         }
 
         function drawCurrentState() {
-            const
-            scaledWidth = canvas.width / devicePixelRatio;
+            const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
 
             ctx.clearRect(0, 0, scaledWidth, scaledHeight);
@@ -306,7 +305,9 @@
         
         function drawStartScreen() {
             uiBoxes = {};
-            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const scaledWidth = canvas.width / devicePixelRatio;
+            const scaledHeight = canvas.height / devicePixelRatio;
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, scaledWidth, scaledHeight);
             if (startScreenState === 'main') {
                 drawMainMenu();
             } else if (startScreenState === 'leaderboard') {
@@ -350,7 +351,7 @@
                 const btnSize = 40, margin = 15;
                 const btnX = canvas.width / devicePixelRatio - btnSize - margin; const btnY = margin;
                 pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize };
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnHeight);
                 ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20);
             }
         }
@@ -424,26 +425,17 @@
         function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
         
         function gameLoop(timestamp) {
-            cancelAnimationFrame(animationFrameId); // 기존 루프 중지
+            cancelAnimationFrame(animationFrameId);
 
-            if (gameState === 'loading') {
-                drawCurrentState();
-                animationFrameId = requestAnimationFrame(gameLoop);
-                return;
-            }
             if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
             
-            // 게임 로직 업데이트
             if (gameState === 'playing') {
                 updateObjects(deltaTime);
                 movePlayer();
-            } else if (gameState === 'startScreen') {
-                // 스크롤과 같은 실시간 상호작용을 위해 그리기 함수를 루프 안에 둠
             }
-
-            // 그리기
+            
             drawCurrentState();
             
             animationFrameId = requestAnimationFrame(gameLoop);
@@ -464,11 +456,11 @@
 
         initializeFirebase();
         bgm.volume = 0.5;
-        setupCanvas();
+        setupCanvas(); // 최초 캔버스 설정
         listenForLeaderboardUpdates();
         loadImages().then(() => {
             gameState = 'startScreen';
-            gameLoop(0); // 최초 게임 루프 시작
+            gameLoop(0);
         }).catch(error => {
             console.error(error);
             alert('캐릭터 이미지를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
