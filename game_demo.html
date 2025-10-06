@@ -84,9 +84,7 @@
             leaderboardCollection.orderBy('score', 'desc').limit(10)
                 .onSnapshot(snapshot => {
                     const leaderboard = [];
-                    snapshot.forEach(doc => {
-                        leaderboard.push(doc.data());
-                    });
+                    snapshot.forEach(doc => { leaderboard.push(doc.data()); });
                     cachedLeaderboard = leaderboard;
                     if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
                         drawCurrentState();
@@ -123,6 +121,7 @@
         }
 
         function init() {
+            const scaledHeight = canvas.height / devicePixelRatio;
             const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
             const displayWidth = selectedCharacter.originalWidth;
             const displayHeight = selectedCharacter.originalHeight;
@@ -137,7 +136,7 @@
             player = {
                 width: playerWidth, height: playerHeight,
                 x: canvas.width / devicePixelRatio / 2 - playerWidth / 2, 
-                y: canvas.height / devicePixelRatio - playerHeight - 60,
+                y: scaledHeight - playerHeight - (scaledHeight * 0.1),
                 speed: selectedCharacter.speed, img: selectedCharacter.img, dx: 0
             };
             targetX = player.x; objects = []; score = 0; spawnTimer = 0;
@@ -212,7 +211,7 @@
 
             const listStartY = scaledHeight * 0.15;
             const listHeight = scaledHeight * 0.7;
-            const boxWidth = Math.min(scaledWidth * 0.8, 350); // 화면 너비의 80% 또는 최대 350px
+            const boxWidth = Math.min(scaledWidth * 0.8, 350);
             const boxHeight = 40, gap = 10;
             
             if (cachedLeaderboard === null) {
@@ -268,7 +267,7 @@
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
             ctx.fillText('캐릭터를 선택하세요', scaledWidth / 2, scaledHeight * 0.2);
             
-            const displayCharSize = Math.min(scaledWidth / 4, 100); // 화면 크기에 따라 캐릭터 박스 크기 조절
+            const displayCharSize = Math.min(scaledWidth / 4, 100);
             const gap = 20;
             const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
             let startX = (scaledWidth - totalWidth) / 2;
@@ -295,28 +294,36 @@
             drawConfirmButton(scaledHeight * 0.85);
         }
 
+        // ✨ 메인 메뉴 UI 그리기 함수 수정
         function drawMainMenu() {
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
+            
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
             ctx.fillText('물체 피하기 게임', scaledWidth / 2, scaledHeight * 0.2);
             
-            const btnWidth = Math.min(scaledWidth * 0.8, 300); // 버튼 너비도 동적으로
-            const btnHeight = 60, gap = 20;
+            const btnWidth = Math.min(scaledWidth * 0.8, 300);
+            const btnHeight = Math.min(scaledHeight * 0.1, 60);
+            const gap = btnHeight * 0.33;
+            const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2);
             const btnX = (scaledWidth - btnWidth) / 2;
-            const startY = scaledHeight * 0.4;
+            let startY = (scaledHeight - totalBtnBlockHeight) / 2;
+
+            if (startY < scaledHeight * 0.3) { // 타이틀과 겹치지 않게
+                startY = scaledHeight * 0.3;
+            }
 
             uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', scaledWidth / 2, startY + 38);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', scaledWidth / 2, startY + btnHeight / 2 + 8);
             
             uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', scaledWidth / 2, startY + btnHeight + gap + 38);
+            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', scaledWidth / 2, startY + btnHeight + gap + btnHeight / 2 + 8);
             
             uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', scaledWidth / 2, startY + (btnHeight + gap) * 2 + 38);
+            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', scaledWidth / 2, startY + (btnHeight + gap) * 2 + btnHeight / 2 + 8);
         }
         
         function drawStartScreen() {
@@ -482,11 +489,13 @@
         listenForLeaderboardUpdates();
         loadImages().then(() => {
             gameState = 'startScreen';
-            gameLoop(0);
         }).catch(error => {
             console.error(error);
             alert('캐릭터 이미지를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
         });
+
+        // 최초 게임 루프 시작
+        gameLoop(0);
     </script>
 </body>
 </html>
