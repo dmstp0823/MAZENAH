@@ -263,19 +263,23 @@
             drawConfirmButton(scaledHeight * 0.9);
         }
         
+        // ✨ 캐릭터 선택 화면 UI 재배치
         function drawCharacterSelectScreen() {
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('캐릭터를 선택하세요', scaledWidth / 2, scaledHeight * 0.2);
+            ctx.fillText('캐릭터를 선택하세요', scaledWidth / 2, scaledHeight * 0.15);
             
             const displayCharSize = Math.min(scaledWidth / 4, 100);
             const gap = 20;
             const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
             let startX = (scaledWidth - totalWidth) / 2;
+            
+            // 캐릭터 박스를 화면 중앙에 위치
+            const boxY = (scaledHeight - displayCharSize) / 2 - 50;
             uiBoxes.characterBoxes = [];
+
             characters.forEach(char => {
-                const boxY = scaledHeight * 0.4;
                 let imgDrawWidth = displayCharSize; let imgDrawHeight = displayCharSize;
                 if (char.originalWidth && char.originalHeight) {
                     const aspectRatio = char.originalWidth / char.originalHeight;
@@ -293,30 +297,24 @@
                 uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
                 startX += displayCharSize + gap;
             });
-            drawConfirmButton(scaledHeight * 0.85);
+            drawConfirmButton(scaledHeight * 0.8);
         }
 
-        // ✨ 메인 메뉴 UI 그리기 함수 수정
+        // ✨ 메인 메뉴 UI 그리기 함수 재배치
         function drawMainMenu() {
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
             
-            // 타이틀 폰트 크기 동적 조절
             const titleFontSize = Math.min(scaledWidth * 0.1, 48);
             ctx.fillStyle = '#2c3e50'; ctx.font = `bold ${titleFontSize}px Arial`; ctx.textAlign = 'center';
             ctx.fillText('물체 피하기 게임', scaledWidth / 2, scaledHeight * 0.2);
             
-            // 버튼 크기 및 위치 동적 조절
             const btnWidth = Math.min(scaledWidth * 0.7, 300);
             const btnHeight = Math.min(scaledHeight * 0.1, 60);
-            const gap = btnHeight * 0.33;
+            const gap = btnHeight * 0.5;
             const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2);
             const btnX = (scaledWidth - btnWidth) / 2;
-            let startY = (scaledHeight - totalBtnBlockHeight) / 2;
-
-            if (startY < scaledHeight * 0.3) {
-                startY = scaledHeight * 0.3;
-            }
+            let startY = (scaledHeight - totalBtnBlockHeight) * 0.6; // 버튼 블록을 약간 아래로 이동
 
             const btnFontSize = Math.min(btnHeight * 0.4, 24);
             ctx.font = `bold ${btnFontSize}px Arial`;
