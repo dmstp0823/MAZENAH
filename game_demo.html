@@ -84,7 +84,9 @@
             leaderboardCollection.orderBy('score', 'desc').limit(10)
                 .onSnapshot(snapshot => {
                     const leaderboard = [];
-                    snapshot.forEach(doc => { leaderboard.push(doc.data()); });
+                    snapshot.forEach(doc => {
+                        leaderboard.push(doc.data());
+                    });
                     cachedLeaderboard = leaderboard;
                     if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
                         drawCurrentState();
@@ -299,31 +301,37 @@
             const scaledWidth = canvas.width / devicePixelRatio;
             const scaledHeight = canvas.height / devicePixelRatio;
             
-            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
+            // 타이틀 폰트 크기 동적 조절
+            const titleFontSize = Math.min(scaledWidth * 0.1, 48);
+            ctx.fillStyle = '#2c3e50'; ctx.font = `bold ${titleFontSize}px Arial`; ctx.textAlign = 'center';
             ctx.fillText('물체 피하기 게임', scaledWidth / 2, scaledHeight * 0.2);
             
-            const btnWidth = Math.min(scaledWidth * 0.8, 300);
+            // 버튼 크기 및 위치 동적 조절
+            const btnWidth = Math.min(scaledWidth * 0.7, 300);
             const btnHeight = Math.min(scaledHeight * 0.1, 60);
             const gap = btnHeight * 0.33;
             const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2);
             const btnX = (scaledWidth - btnWidth) / 2;
             let startY = (scaledHeight - totalBtnBlockHeight) / 2;
 
-            if (startY < scaledHeight * 0.3) { // 타이틀과 겹치지 않게
+            if (startY < scaledHeight * 0.3) {
                 startY = scaledHeight * 0.3;
             }
 
+            const btnFontSize = Math.min(btnHeight * 0.4, 24);
+            ctx.font = `bold ${btnFontSize}px Arial`;
+
             uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', scaledWidth / 2, startY + btnHeight / 2 + 8);
+            ctx.fillStyle = 'white'; ctx.fillText('캐릭터 선택', scaledWidth / 2, startY + btnHeight / 2 + (btnFontSize / 3));
             
             uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', scaledWidth / 2, startY + btnHeight + gap + btnHeight / 2 + 8);
+            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', scaledWidth / 2, startY + btnHeight + gap + btnHeight / 2 + (btnFontSize / 3));
             
             uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', scaledWidth / 2, startY + (btnHeight + gap) * 2 + btnHeight / 2 + 8);
+            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', scaledWidth / 2, startY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
         }
         
         function drawStartScreen() {
@@ -493,8 +501,7 @@
             console.error(error);
             alert('캐릭터 이미지를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
         });
-
-        // 최초 게임 루프 시작
+        
         gameLoop(0);
     </script>
 </body>
