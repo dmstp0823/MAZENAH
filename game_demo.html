@@ -22,7 +22,6 @@
         canvas {
             display: block;
             cursor: pointer;
-            /* 기본 배경색은 JavaScript에서 제어 */
         }
     </style>
 </head>
@@ -59,10 +58,11 @@
         let leaderboardCollection;
         let cachedLeaderboard = null;
 
+        // ✨ 아이콘 이미지 파일 경로 수정
         const characters = [
-            { id: 1, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-3.png', img: null, imgSelected: null, imgIcon: null },
-            { id: 2, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-3.png', img: null, imgSelected: null, imgIcon: null },
-            { id: 3, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-3.png', img: null, imgSelected: null, imgIcon: null }
+            { id: 1, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './1-2.png', img: null, imgSelected: null, imgIcon: null },
+            { id: 2, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './2-2.png', img: null, imgSelected: null, imgIcon: null },
+            { id: 3, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './3-2.png', img: null, imgSelected: null, imgIcon: null }
         ];
         let selectedCharacterId = 1;
         
@@ -120,9 +120,9 @@
 
         function drawCurrentState() {
             const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            canvas.style.backgroundColor = bgColor;
             
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
             if (gameState === 'loading') { ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); }
             else if (gameState === 'startScreen') { drawStartScreen(); }
             else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawUI(); }
@@ -187,15 +187,11 @@
                 const currentSize = displayCharSize * scale;
                 const currentX = startX - (currentSize - displayCharSize) / 2;
                 const currentY = boxY - (currentSize - displayCharSize) / 2;
-
                 let imgToDraw = isSelected ? char.imgSelected : char.img;
-                
                 let imgDrawWidth = currentSize; let imgDrawHeight = currentSize;
                 if (char.originalWidth && char.originalHeight) { const aspectRatio = char.originalWidth / char.originalHeight; if (aspectRatio > 1) { imgDrawHeight = currentSize / aspectRatio; } else { imgDrawWidth = currentSize * aspectRatio; } }
                 const imgDrawX = currentX + (currentSize - imgDrawWidth) / 2; const imgDrawY = currentY + (currentSize - imgDrawHeight) / 2;
-                
                 if (imgToDraw) { ctx.drawImage(imgToDraw, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
-                
                 ctx.fillStyle = '#2c3e50'; ctx.font = '20px "MyGameFont"'; ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
                 uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
                 startX += displayCharSize + gap;
@@ -225,22 +221,14 @@
             drawObjects(); drawPlayer(); drawUI(false);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            
             const btnWidth = 200, btnHeight = 60, gap = 30;
-            const centerX = GAME_WIDTH / 2;
-            const centerY = GAME_HEIGHT / 2;
-
+            const centerX = GAME_WIDTH / 2; const centerY = GAME_HEIGHT / 2;
             uiBoxes.resumeBtn = { x: centerX - btnWidth / 2, y: centerY - btnHeight - gap / 2, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#2ecc71';
-            ctx.fillRect(uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center';
-            ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
-
+            ctx.fillStyle = '#2ecc71'; ctx.fillRect(uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
             uiBoxes.toMainBtn = { x: centerX - btnWidth / 2, y: centerY + gap / 2, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
-            ctx.fillStyle = 'white';
-            ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
+            ctx.fillStyle = '#e74c3c'; ctx.fillRect(uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
+            ctx.fillStyle = 'white'; ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
         
         function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); ctx.font = '24px "MyGameFont"'; ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save Score', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); }
