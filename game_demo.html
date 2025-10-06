@@ -101,7 +101,12 @@
                 return new Promise((resolve, reject) => {
                     char.img = new Image();
                     char.img.src = char.imgSrc;
-                    char.img.onload = () => resolve();
+                    char.img.onload = () => {
+                        // ✨ 이미지의 실제 너비와 높이를 저장
+                        char.originalWidth = char.img.naturalWidth;
+                        char.originalHeight = char.img.naturalHeight;
+                        resolve();
+                    };
                     char.img.onerror = () => reject(`이미지 로드 실패: ${char.imgSrc}`);
                 });
             });
@@ -110,10 +115,31 @@
 
         function init() {
             const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
+            // ✨ 플레이어 크기를 이미지의 원본 크기에 맞춰 조정 (여기서는 최대 80px로 제한)
+            const displayWidth = selectedCharacter.originalWidth;
+            const displayHeight = selectedCharacter.originalHeight;
+
+            // 이미지가 너무 클 경우 최대 크기를 제한하고 비율 유지
+            const MAX_PLAYER_SIZE = 80; // 최대 너비/높이
+            let playerWidth = displayWidth;
+            let playerHeight = displayHeight;
+
+            if (playerWidth > MAX_PLAYER_SIZE || playerHeight > MAX_PLAYER_SIZE) {
+                const aspectRatio = displayWidth / displayHeight;
+                if (aspectRatio > 1) { // 가로가 더 김
+                    playerWidth = MAX_PLAYER_SIZE;
+                    playerHeight = MAX_PLAYER_SIZE / aspectRatio;
+                } else { // 세로가 더 김 (또는 정사각형)
+                    playerHeight = MAX_PLAYER_SIZE;
+                    playerWidth = MAX_PLAYER_SIZE * aspectRatio;
+                }
+            }
+            
             player = {
-                width: 60, height: 60,
-                x: canvas.width / 2 - 30,
-                y: canvas.height - 120,
+                width: playerWidth,
+                height: playerHeight,
+                x: canvas.width / 2 - playerWidth / 2, // 플레이어의 중앙을 맞춤
+                y: canvas.height - playerHeight - 60, // 캐릭터 위치 위로 조정
                 speed: selectedCharacter.speed,
                 img: selectedCharacter.img,
                 dx: 0
@@ -164,7 +190,7 @@
             ctx.fillText('확인', canvas.width / 2, yPos + 32);
         }
         
-        function drawBackButton(yPos) {
+        function drawBackButton(yPos) { // 이 함수는 이제 순위표에서 사용되지 않지만, 다른 곳에서 쓰일까봐 남겨둡니다.
             const btnWidth = 150, btnHeight = 50;
             const btnX = (canvas.width - btnWidth) / 2;
             uiBoxes.backBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight };
@@ -179,7 +205,7 @@
             ctx.fillText('🏆 Top 10 🏆', canvas.width / 2, 50);
 
             const listStartY = 100;
-            const listHeight = canvas.height - 200;
+            const listHeight = canvas.height - 200; // 순위표 표시 영역 높이
             const boxWidth = 300, boxHeight = 40, gap = 10;
             leaderboardTotalHeight = leaderboard.length * (boxHeight + gap) - gap;
 
@@ -190,12 +216,12 @@
             
             ctx.save();
             ctx.beginPath();
-            ctx.rect(0, listStartY, canvas.width, listHeight);
-            ctx.clip();
+            ctx.rect(0, listStartY, canvas.width, listHeight); // 순위표 스크롤 영역 정의
+            ctx.clip(); // 이 영역 밖은 그려지지 않음
 
             if (leaderboard.length === 0) {
                 ctx.font = '20px Arial';
-                ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, listStartY + 50);
+                ctx.fillText('아직 기록이 없습니다!', canvas.width / 2, listStartY + 50 + leaderboardScrollY); // 스크롤 적용
             } else {
                 leaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
@@ -210,7 +236,8 @@
                     ctx.fillText(entry.score, (canvas.width + boxWidth) / 2 - 20, boxY + 25);
                 });
             }
-            ctx.restore();
+            ctx.restore(); // 클리핑 영역 해제
+
             drawConfirmButton(canvas.height - 80);
         }
 
@@ -218,19 +245,43 @@
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
             ctx.fillText('캐릭터를 선택하세요', canvas.width / 2, canvas.height * 0.2);
             
-            const boxWidth = 100, boxHeight = 100, gap = 20;
-            const totalWidth = (boxWidth * characters.length) + (gap * (characters.length - 1));
+            const displayCharSize = 100; // 캐릭터 선택 화면에서 보여줄 최대 이미지 크기
+            const gap = 20;
+            const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
             let startX = (canvas.width - totalWidth) / 2;
             uiBoxes.characterBoxes = [];
             characters.forEach(char => {
                 const boxY = canvas.height * 0.4;
-                if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, boxWidth + 10, boxHeight + 10); }
-                if (char.img) { ctx.drawImage(char.img, startX, boxY, boxWidth, boxHeight); }
-                else { ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, boxWidth, boxHeight); }
+
+                // 이미지 비율 유지하며 크기 조정
+                let imgDrawWidth = displayCharSize;
+                let imgDrawHeight = displayCharSize;
+                if (char.originalWidth && char.originalHeight) {
+                    const aspectRatio = char.originalWidth / char.originalHeight;
+                    if (aspectRatio > 1) { // 가로가 더 긴 이미지
+                        imgDrawHeight = displayCharSize / aspectRatio;
+                    } else { // 세로가 더 길거나 정사각형 이미지
+                        imgDrawWidth = displayCharSize * aspectRatio;
+                    }
+                }
+                const imgDrawX = startX + (displayCharSize - imgDrawWidth) / 2;
+                const imgDrawY = boxY + (displayCharSize - imgDrawHeight) / 2;
+
+
+                if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, displayCharSize + 10, displayCharSize + 10); }
+                
+                // 캐릭터 배경 사각형
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); // 이미지 뒤에 깔릴 사각형
+
+                if (char.img) { ctx.drawImage(char.img, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
+                else { ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); } // 이미지 없을 때
+                
                 ctx.fillStyle = '#2c3e50'; ctx.font = '20px Arial';
-                ctx.fillText(char.name, startX + boxWidth / 2, boxY + boxHeight + 30);
-                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: boxWidth, height: boxHeight });
-                startX += boxWidth + gap;
+                ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
+                // 선택 영역은 여전히 큰 사각형으로
+                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
+                startX += displayCharSize + gap;
             });
             drawConfirmButton(canvas.height * 0.85);
         }
@@ -328,6 +379,7 @@
                 const obj = objects[i];
                 obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
                 if (obj.y > canvas.height) { objects.splice(i, 1); continue; }
+                // 충돌 판정
                 if (player.x < obj.x + obj.width && player.x + player.width > obj.x &&
                     player.y < obj.y + obj.height && player.y + player.height > obj.y) {
                     if (obj.type === 'bad') { gameState = 'gameOver'; bgm.pause(); }
@@ -337,66 +389,6 @@
             }
         }
 
-        async function handleInteractionStart(e) {
-            e.preventDefault();
-            const pos = getEventPos(e);
-            if (gameState === 'startScreen') {
-                if (startScreenState === 'main') {
-                    if (isInside(pos, uiBoxes.charSelectBtn)) startScreenState = 'characterSelect';
-                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) init();
-                } else {
-                    if (startScreenState === 'characterSelect') {
-                        uiBoxes.characterBoxes.forEach(box => { if (isInside(pos, box)) selectedCharacterId = box.id; });
-                    }
-                    if (isInside(pos, uiBoxes.confirmBtn)) { startScreenState = 'main'; leaderboardScrollY = 0; }
-                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; }
-                }
-            } else if (gameState === 'playing') {
-                if (isInside(pos, pauseButtonBox)) { gameState = 'paused'; bgm.pause(); }
-                else { player.dx = 0; targetX = pos.x - player.width / 2; }
-            } else if (gameState === 'paused') {
-                gameState = 'playing'; bgm.play();
-            } else if (gameState === 'gameOver') {
-                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-                if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
-                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
-            }
-        }
-
-        function handleInteractionMove(e) {
-            e.preventDefault();
-            const pos = getEventPos(e);
-            if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) {
-                const deltaY = pos.y - lastTouchY;
-                leaderboardScrollY += deltaY;
-                lastTouchY = pos.y;
-            } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) {
-                player.dx = 0; targetX = pos.x - player.width / 2;
-            }
-        }
-        
-        function handleInteractionEnd(e) {
-            isDragging = false;
-        }
-
-        function handleKeyDown(e) {
-            if (gameState !== 'playing') return;
-            if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed;
-            else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed;
-        }
-
-        function handleKeyUp(e) {
-            if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0;
-        }
-
-        function handleWheel(e) {
-            if (gameState === 'startScreen' && startScreenState === 'leaderboard') {
-                e.preventDefault();
-                leaderboardScrollY -= e.deltaY * 0.5;
-            }
-        }
-        
         // --- 메인 게임 루프 ---
         async function gameLoop(timestamp) {
             if (gameState === 'loading') {
@@ -416,7 +408,7 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- 이벤트 리스너 및 게임 시작점 ---
+        // --- 이벤트 리스너 ---
         window.addEventListener('resize', resizeCanvas);
         document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
         document.addEventListener('keydown', handleKeyDown);
@@ -429,11 +421,12 @@
         canvas.addEventListener('mouseup', handleInteractionEnd);
         canvas.addEventListener('wheel', handleWheel);
 
-        initializeFirebase();
+        // --- 게임 시작점 ---
+        initializeFirebase(); // Firebase 먼저 초기화
         bgm.volume = 0.5;
         resizeCanvas();
         loadImages().then(() => {
-            gameState = 'startScreen';
+            gameState = 'startScreen'; // 이미지 로드 완료 후 시작 화면으로 전환
             gameLoop(0);
         }).catch(error => {
             console.error(error);
