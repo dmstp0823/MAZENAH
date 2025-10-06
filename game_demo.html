@@ -67,6 +67,7 @@
         const FEVER_SPAWN_INTERVAL = 120;
         let pauseButtonBox = {};
         let devicePixelRatio = window.devicePixelRatio || 1;
+        let animationFrameId; // ✨ animationFrameId 변수 선언
 
         // --- 함수 정의 ---
         
@@ -153,16 +154,19 @@
                 canvas.width = rect.width * devicePixelRatio;
                 canvas.height = rect.height * devicePixelRatio;
                 ctx.scale(devicePixelRatio, devicePixelRatio);
-                drawCurrentState(); // 크기가 변경될 때만 다시 그림
+                drawCurrentState();
             }
         }
 
-        // 모든 그리기 작업을 통합하는 함수
         function drawCurrentState() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const
+            scaledWidth = canvas.width / devicePixelRatio;
+            const scaledHeight = canvas.height / devicePixelRatio;
+
+            ctx.clearRect(0, 0, scaledWidth, scaledHeight);
             if (gameState === 'loading') {
                 ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
-                ctx.fillText('로딩 중...', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio / 2);
+                ctx.fillText('로딩 중...', scaledWidth / 2, scaledHeight / 2);
             } else if (gameState === 'startScreen') {
                 drawStartScreen();
             } else if (gameState === 'playing') {
@@ -194,20 +198,22 @@
         function drawBackButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (canvas.width / devicePixelRatio - btnWidth) / 2; uiBoxes.backBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.fillStyle = '#7f8c8d'; ctx.fillRect(btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'; ctx.fillText('뒤로가기', canvas.width / devicePixelRatio / 2, yPos + 32); }
         
         function drawLeaderboardScreen() {
-            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const scaledWidth = canvas.width / devicePixelRatio;
+            const scaledHeight = canvas.height / devicePixelRatio;
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, scaledWidth, scaledHeight);
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('🏆 Top 10 🏆', canvas.width / devicePixelRatio / 2, 50);
+            ctx.fillText('🏆 Top 10 🏆', scaledWidth / 2, 50);
 
             const listStartY = 100;
-            const listHeight = canvas.height / devicePixelRatio - 200;
+            const listHeight = scaledHeight - 200;
             const boxWidth = 300, boxHeight = 40, gap = 10;
             
             if (cachedLeaderboard === null) {
                 ctx.font = '20px Arial';
-                ctx.fillText('로딩 중...', canvas.width / devicePixelRatio / 2, listStartY + 50);
+                ctx.fillText('로딩 중...', scaledWidth / 2, listStartY + 50);
             } else if (cachedLeaderboard.length === 0) {
                 ctx.font = '20px Arial';
-                ctx.fillText('아직 기록이 없습니다!', canvas.width / devicePixelRatio / 2, listStartY + 50);
+                ctx.fillText('아직 기록이 없습니다!', scaledWidth / 2, listStartY + 50);
             } else {
                 leaderboardTotalHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
                 const maxScroll = 0;
@@ -217,17 +223,17 @@
                 
                 ctx.save();
                 ctx.beginPath();
-                ctx.rect(0, listStartY, canvas.width / devicePixelRatio, listHeight);
+                ctx.rect(0, listStartY, scaledWidth, listHeight);
                 ctx.clip();
 
                 cachedLeaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     ctx.fillStyle = index < 3 ? '#f1c40f' : '#bdc3c7';
-                    ctx.fillRect((canvas.width / devicePixelRatio - boxWidth) / 2, boxY, boxWidth, boxHeight);
+                    ctx.fillRect((scaledWidth - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px Arial';
                     
-                    const rankTextX = (canvas.width / devicePixelRatio - boxWidth) / 2 + 20;
+                    const rankTextX = (scaledWidth - boxWidth) / 2 + 20;
                     
                     const character = characters.find(c => c.name === entry.character);
                     const charColor = character ? character.color : '#7f8c8d';
@@ -242,22 +248,24 @@
                     ctx.fillText(entry.name, charBoxX + charBoxSize + 10, boxY + 25);
                     
                     ctx.textAlign = 'right';
-                    ctx.fillText(entry.score, (canvas.width / devicePixelRatio + boxWidth) / 2 - 20, boxY + 25);
+                    ctx.fillText(entry.score, (scaledWidth + boxWidth) / 2 - 20, boxY + 25);
                 });
                 ctx.restore();
             }
-            drawConfirmButton(canvas.height / devicePixelRatio - 80);
+            drawConfirmButton(scaledHeight - 80);
         }
         
         function drawCharacterSelectScreen() {
+            const scaledWidth = canvas.width / devicePixelRatio;
+            const scaledHeight = canvas.height / devicePixelRatio;
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('캐릭터를 선택하세요', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio * 0.2);
+            ctx.fillText('캐릭터를 선택하세요', scaledWidth / 2, scaledHeight * 0.2);
             const displayCharSize = 100; const gap = 20;
             const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
-            let startX = (canvas.width / devicePixelRatio - totalWidth) / 2;
+            let startX = (scaledWidth - totalWidth) / 2;
             uiBoxes.characterBoxes = [];
             characters.forEach(char => {
-                const boxY = canvas.height / devicePixelRatio * 0.4;
+                const boxY = scaledHeight * 0.4;
                 let imgDrawWidth = displayCharSize; let imgDrawHeight = displayCharSize;
                 if (char.originalWidth && char.originalHeight) {
                     const aspectRatio = char.originalWidth / char.originalHeight;
@@ -275,23 +283,25 @@
                 uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
                 startX += displayCharSize + gap;
             });
-            drawConfirmButton(canvas.height / devicePixelRatio * 0.85);
+            drawConfirmButton(scaledHeight * 0.85);
         }
 
         function drawMainMenu() {
+            const scaledWidth = canvas.width / devicePixelRatio;
+            const scaledHeight = canvas.height / devicePixelRatio;
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 48px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('물체 피하기 게임', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio * 0.2);
+            ctx.fillText('물체 피하기 게임', scaledWidth / 2, scaledHeight * 0.2);
             const btnWidth = 250, btnHeight = 60, gap = 30;
-            const btnX = (canvas.width / devicePixelRatio - btnWidth) / 2, startY = canvas.height / devicePixelRatio * 0.4;
+            const btnX = (scaledWidth - btnWidth) / 2, startY = scaledHeight * 0.4;
             uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#2ecc71'; ctx.fillRect(btnX, startY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', canvas.width / devicePixelRatio / 2, startY + 38);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.fillText('캐릭터 선택', scaledWidth / 2, startY + 38);
             uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#e67e22'; ctx.fillRect(btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', canvas.width / devicePixelRatio / 2, startY + btnHeight + gap + 38);
+            ctx.fillStyle = 'white'; ctx.fillText('순위 보기', scaledWidth / 2, startY + btnHeight + gap + 38);
             uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
             ctx.fillStyle = '#3498db'; ctx.fillRect(btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', canvas.width / devicePixelRatio / 2, startY + (btnHeight + gap) * 2 + 38);
+            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', scaledWidth / 2, startY + (btnHeight + gap) * 2 + 38);
         }
         
         function drawStartScreen() {
@@ -414,36 +424,27 @@
         function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
         
         function gameLoop(timestamp) {
-            if (!gameState) return;
             cancelAnimationFrame(animationFrameId); // 기존 루프 중지
-            
+
             if (gameState === 'loading') {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
-                ctx.fillText('로딩 중...', canvas.width / devicePixelRatio / 2, canvas.height / devicePixelRatio / 2);
+                drawCurrentState();
                 animationFrameId = requestAnimationFrame(gameLoop);
                 return;
             }
-
             if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
             
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (gameState === 'startScreen') {
-                drawStartScreen();
-            } else if (gameState === 'playing') {
+            // 게임 로직 업데이트
+            if (gameState === 'playing') {
                 updateObjects(deltaTime);
                 movePlayer();
-                drawObjects();
-                drawPlayer();
-                drawUI();
-            } else if (gameState === 'paused') {
-                drawPauseScreen();
-            } else if (gameState === 'gameOver') {
-                drawGameOver();
+            } else if (gameState === 'startScreen') {
+                // 스크롤과 같은 실시간 상호작용을 위해 그리기 함수를 루프 안에 둠
             }
+
+            // 그리기
+            drawCurrentState();
             
             animationFrameId = requestAnimationFrame(gameLoop);
         }
@@ -467,7 +468,7 @@
         listenForLeaderboardUpdates();
         loadImages().then(() => {
             gameState = 'startScreen';
-            gameLoop(0);
+            gameLoop(0); // 최초 게임 루프 시작
         }).catch(error => {
             console.error(error);
             alert('캐릭터 이미지를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
