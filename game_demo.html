@@ -11,6 +11,7 @@
             src: url('./fonts/Pak_Yong_jun.ttf') format('truetype');
         }
 
+        /* body 스타일 수정: Flexbox로 중앙 정렬 */
         html, body {
             margin: 0;
             padding: 0;
@@ -61,7 +62,7 @@
         let db;
         let leaderboardCollection;
         let cachedLeaderboard = null;
-        const characters = [ { id: 1, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', img: null, imgSelected: null }, { id: 2, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', img: null, imgSelected: null }, { id: 3, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', img: null, imgSelected: null } ];
+        const characters = [ { id: 1, name: '블루', color: '#3498db', speed: 9, imgSrc: './char1.png', img: null }, { id: 2, name: '그린', color: '#2ecc71', speed: 7, imgSrc: './char2.png', img: null }, { id: 3, name: '퍼플', color: '#8e44ad', speed: 8, imgSrc: './char3.png', img: null } ];
         let selectedCharacterId = 1;
         let uiBoxes = {};
         let startScreenState = 'main'; 
@@ -85,7 +86,7 @@
         function initializeFirebase() { try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요."); } }
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { const leaderboard = []; snapshot.forEach(doc => { leaderboard.push(doc.data()); }); cachedLeaderboard = leaderboard; }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
-        function loadImages() { let promises = characters.flatMap(char => [ new Promise((resolve, reject) => { char.img = new Image(); char.img.src = char.imgSrc; char.img.onload = () => { char.originalWidth = char.img.naturalWidth; char.originalHeight = char.img.naturalHeight; resolve(); }; char.img.onerror = () => reject(`이미지 로드 실패: ${char.imgSrc}`); }), new Promise((resolve, reject) => { char.imgSelected = new Image(); char.imgSelected.src = char.imgSrcSelected; char.imgSelected.onload = () => resolve(); char.imgSelected.onerror = () => reject(`이미지 로드 실패: ${char.imgSrcSelected}`); }) ]); return Promise.all(promises); }
+        function loadImages() { let promises = characters.map(char => { return new Promise((resolve, reject) => { char.img = new Image(); char.img.src = char.imgSrc; char.img.onload = () => { char.originalWidth = char.img.naturalWidth; char.originalHeight = char.img.naturalHeight; resolve(); }; char.img.onerror = () => reject(`이미지 로드 실패: ${char.imgSrc}`); }); }); return Promise.all(promises); }
 
         function init() {
             const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
@@ -160,12 +161,12 @@
             const boxY = (GAME_HEIGHT - displayCharSize) / 2 - 50;
             uiBoxes.characterBoxes = [];
             characters.forEach(char => {
-                let imgToDraw = (char.id === selectedCharacterId) ? char.imgSelected : char.img;
                 let imgDrawWidth = displayCharSize; let imgDrawHeight = displayCharSize;
                 if (char.originalWidth && char.originalHeight) { const aspectRatio = char.originalWidth / char.originalHeight; if (aspectRatio > 1) { imgDrawHeight = displayCharSize / aspectRatio; } else { imgDrawWidth = displayCharSize * aspectRatio; } }
                 const imgDrawX = startX + (displayCharSize - imgDrawWidth) / 2; const imgDrawY = boxY + (displayCharSize - imgDrawHeight) / 2;
+                if (char.id === selectedCharacterId) { ctx.fillStyle = 'orange'; ctx.fillRect(startX - 5, boxY - 5, displayCharSize + 10, displayCharSize + 10); }
                 ctx.fillStyle = '#ecf0f1'; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize);
-                if (imgToDraw) { ctx.drawImage(imgToDraw, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
+                if (char.img) { ctx.drawImage(char.img, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); } else { ctx.fillStyle = char.color; ctx.fillRect(startX, boxY, displayCharSize, displayCharSize); }
                 ctx.fillStyle = '#2c3e50'; ctx.font = '20px "MyGameFont"'; ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
                 uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
                 startX += displayCharSize + gap;
