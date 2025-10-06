@@ -60,9 +60,9 @@
 
         // ✨ 아이콘 이미지 파일 경로 수정
         const characters = [
-            { id: 1, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './1-2.png', img: null, imgSelected: null, imgIcon: null },
-            { id: 2, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './2-2.png', img: null, imgSelected: null, imgIcon: null },
-            { id: 3, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './3-2.png', img: null, imgSelected: null, imgIcon: null }
+            { id: 1, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', img: null, imgSelected: null, imgIcon: null },
+            { id: 2, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', img: null, imgSelected: null, imgIcon: null },
+            { id: 3, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', img: null, imgSelected: null, imgIcon: null }
         ];
         let selectedCharacterId = 1;
         
@@ -224,11 +224,15 @@
             const btnWidth = 200, btnHeight = 60, gap = 30;
             const centerX = GAME_WIDTH / 2; const centerY = GAME_HEIGHT / 2;
             uiBoxes.resumeBtn = { x: centerX - btnWidth / 2, y: centerY - btnHeight - gap / 2, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#2ecc71'; ctx.fillRect(uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center';
+            ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
             uiBoxes.toMainBtn = { x: centerX - btnWidth / 2, y: centerY + gap / 2, width: btnWidth, height: btnHeight };
-            ctx.fillStyle = '#e74c3c'; ctx.fillRect(uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
-            ctx.fillStyle = 'white'; ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
+            ctx.fillStyle = 'white';
+            ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
         
         function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); ctx.font = '24px "MyGameFont"'; ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save Score', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); }
