@@ -1,496 +1,515 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>YEAH! We Are CLOVERs!</title>
-    <style>
-        @font-face {
-            font-family: 'MyGameFont';
-            src: url('./fonts/Pak_Yong_jun.ttf') format('truetype');
-        }
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #000;
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        canvas {
-            display: block;
-            cursor: pointer;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>YEAH! We Are CLOVERs!</title>
+    <style>
+        @font-face {
+            font-family: 'MyGameFont';
+            src: url('./fonts/Pak_Yong_jun.ttf') format('truetype');
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            width: 100%;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            cursor: pointer;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    
-    <audio id="bgm" src="./Love3.mp3" loop></audio>
+    <canvas id="gameCanvas"></canvas>
+    <audio id="bgm" src="./Love3.mp3" loop></audio>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
-    <script>
-        // ==================================================================
-        // Firebase Config
-        // ==================================================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
-            authDomain: "clovergame-e712f.firebaseapp.com",
-            projectId: "clovergame-e712f",
-            storageBucket: "clovergame-e712f.appspot.com",
-            messagingSenderId: "525191060039",
-            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
-        };
-        // ==================================================================
+    <script>
+        // ==================================================================
+        // Firebase Config
+        // ==================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
+            authDomain: "clovergame-e712f.firebaseapp.com",
+            projectId: "clovergame-e712f",
+            storageBucket: "clovergame-e712f.appspot.com",
+            messagingSenderId: "525191060039",
+            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
+        };
+        // ==================================================================
 
-        // --- 전역 변수 ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const bgm = document.getElementById('bgm');
-        
-        const GAME_WIDTH = 540;
-        const GAME_HEIGHT = 960;
-        
-        const BGM_VOLUME_NORMAL = 0.5;
-        const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2;
+        // --- 전역 변수 ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const bgm = document.getElementById('bgm');
+        
+        const GAME_WIDTH = 540;
+        const GAME_HEIGHT = 960;
+        
+        const BGM_VOLUME_NORMAL = 0.5;
+        const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2;
 
-        let db, leaderboardCollection, cachedLeaderboard = null;
-        
-        // ✨ characters 배열에 누락된 속성 추가
-        const characters = [
-            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.8, hitVolume: 1.0 },
-            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
-            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', selectSfxSrc: './sounds/char1-1.mp3', hitSfxSrc: './sounds/char1-1-1.mp3', selectVolume: 0.5, hitVolume: 1.0 }
-        ];
-        characters.forEach(char => {
-            char.img = null; char.imgSelected = null; char.imgIcon = null; char.imgHit = null;
-        });
-        
-        let selectedCharacterId = 1;
-        
-        let uiBoxes = {}, startScreenState = 'main'; 
-        let leaderboardScrollY = 0, isDragging = false, lastTouchY = 0;
-        let player, objects, score, spawnTimer, targetX;
-        let gameState = 'loading';
-        let lastTime = 0, gameSpeedMultiplier = 1;
-        let feverScore = 0, isFeverTime = false, feverTimer = 0;
-        const FEVER_DURATION = 5000, FEVER_TRIGGER_COUNT = 10;
-        const BASE_SPAWN_INTERVAL = 450, FEVER_SPAWN_INTERVAL = 120;
-        let pauseButtonBox = {};
-        let animationFrameId;
-        
-        let lives;
-        const MAX_LIVES = 3;
+        let db, leaderboardCollection, cachedLeaderboard = null;
+        
+        const characters = [
+            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.8, hitVolume: 1.0 },
+            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
+            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char1-1.mp3', hitSfxSrc: './sounds/char1-1-1.mp3', selectVolume: 0.5, hitVolume: 1.0 }
+        ];
+        characters.forEach(char => {
+            char.img = null; char.imgSelected = null; char.imgIcon = null; char.imgHit = null;
+        });
+        
+        let selectedCharacterId = 1;
+        
+        let uiBoxes = {}, startScreenState = 'main'; 
+        let leaderboardScrollY = 0, isDragging = false, lastTouchY = 0;
+        let player, objects, score, spawnTimer, targetX;
+        let gameState = 'loading';
+        let lastTime = 0, gameSpeedMultiplier = 1;
+        let feverScore = 0, isFeverTime = false, feverTimer = 0;
+        const FEVER_DURATION = 5000, FEVER_TRIGGER_COUNT = 10;
+        const BASE_SPAWN_INTERVAL = 450, FEVER_SPAWN_INTERVAL = 120;
+        let pauseButtonBox = {};
+        let animationFrameId;
+        
+        let lives;
+        const MAX_LIVES = 3;
 
-        let cloverImg = new Image(), loveImg = new Image(), bombImg = new Image(), cloverTitleImg = new Image();
-        let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
-        let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image();
-        let hasInteracted = false;
+        let cloverImg = new Image(), loveImg = new Image(), bombImg = new Image(), cloverTitleImg = new Image();
+        let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
+        let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image();
+        let hasInteracted = false;
+        let isMuted = false;
 
-        const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
-        const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
-        const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
+        const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
+        const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
+        const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
 
-        // --- 함수 정의 ---
-        
-        function initializeFirebase() { try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요."); } }
-        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { const leaderboard = []; snapshot.forEach(doc => { leaderboard.push(doc.data()); }); cachedLeaderboard = leaderboard; }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
-        async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
-        
-        function loadImages() {
-            let promises = characters.flatMap(char => [
-                new Promise((resolve, reject) => { char.img = new Image(); char.img.src = char.imgSrc; char.img.onload = () => { char.originalWidth = char.img.naturalWidth; char.originalHeight = char.img.naturalHeight; resolve(); }; char.img.onerror = () => reject(`이미지 로드 실패: ${char.imgSrc}`); }),
-                new Promise((resolve, reject) => { char.imgSelected = new Image(); char.imgSelected.src = char.imgSrcSelected; char.imgSelected.onload = resolve; char.imgSelected.onerror = () => reject(`이미지 로드 실패: ${char.imgSrcSelected}`); }),
-                new Promise((resolve, reject) => { char.imgIcon = new Image(); char.imgIcon.src = char.imgIconSrc; char.imgIcon.onload = resolve; char.imgIcon.onerror = () => reject(`이미지 로드 실패: ${char.imgIconSrc}`); }),
-                new Promise((resolve, reject) => { if (char.imgHitSrc) { char.imgHit = new Image(); char.imgHit.src = char.imgHitSrc; char.imgHit.onload = resolve; char.imgHit.onerror = () => reject(`이미지 로드 실패: ${char.imgHitSrc}`); } else { resolve(); } })
-            ]);
-            promises.push(new Promise((resolve, reject) => { cloverImg.src = './clover.png'; cloverImg.onload = resolve; cloverImg.onerror = () => reject('이미지 로드 실패: clover.png'); }));
-            promises.push(new Promise((resolve, reject) => { loveImg.src = './love.png'; loveImg.onload = resolve; loveImg.onerror = () => reject('이미지 로드 실패: love.png'); }));
-            promises.push(new Promise((resolve, reject) => { bombImg.src = './bomb.png'; bombImg.onload = resolve; bombImg.onerror = () => reject('이미지 로드 실패: bomb.png'); }));
-            promises.push(new Promise((resolve, reject) => { cloverTitleImg.src = './clover_title.png'; cloverTitleImg.onload = resolve; cloverTitleImg.onerror = () => reject('이미지 로드 실패: clover_title.png'); }));
-            promises.push(new Promise((resolve, reject) => { darkGrayBtnImg.src = './darkgray.png'; darkGrayBtnImg.onload = resolve; darkGrayBtnImg.onerror = () => reject('이미지 로드 실패: darkgray.png'); }));
-            promises.push(new Promise((resolve, reject) => { lightGrayBtnImg.src = './lightgray.png'; lightGrayBtnImg.onload = resolve; lightGrayBtnImg.onerror = () => reject('이미지 로드 실패: lightgray.png'); }));
-            promises.push(new Promise((resolve, reject) => { majorImg.src = './major.png'; majorImg.onload = resolve; majorImg.onerror = () => reject('이미지 로드 실패: major.png'); }));
-            promises.push(new Promise((resolve, reject) => { yellowImg.src = './yellow.png'; yellowImg.onload = resolve; yellowImg.onerror = () => reject('이미지 로드 실패: yellow.png'); }));
-            promises.push(new Promise((resolve, reject) => { grayImg.src = './gray.png'; grayImg.onload = resolve; grayImg.onerror = () => reject('이미지 로드 실패: gray.png'); }));
-            return Promise.all(promises);
-        }
+        // --- 함수 정의 ---
+        
+        function initializeFirebase() { try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요."); } }
+        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { const leaderboard = []; snapshot.forEach(doc => { leaderboard.push(doc.data()); }); cachedLeaderboard = leaderboard; }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
+        async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
+        
+        function loadImages() {
+            let promises = characters.flatMap(char => [
+                new Promise((resolve, reject) => { char.img = new Image(); char.img.src = char.imgSrc; char.img.onload = () => { char.originalWidth = char.img.naturalWidth; char.originalHeight = char.img.naturalHeight; resolve(); }; char.img.onerror = () => reject(`이미지 로드 실패: ${char.imgSrc}`); }),
+                new Promise((resolve, reject) => { char.imgSelected = new Image(); char.imgSelected.src = char.imgSrcSelected; char.imgSelected.onload = resolve; char.imgSelected.onerror = () => reject(`이미지 로드 실패: ${char.imgSrcSelected}`); }),
+                new Promise((resolve, reject) => { char.imgIcon = new Image(); char.imgIcon.src = char.imgIconSrc; char.imgIcon.onload = resolve; char.imgIcon.onerror = () => reject(`이미지 로드 실패: ${char.imgIconSrc}`); }),
+                new Promise((resolve, reject) => { if (char.imgHitSrc) { char.imgHit = new Image(); char.imgHit.src = char.imgHitSrc; char.imgHit.onload = resolve; char.imgHit.onerror = () => reject(`이미지 로드 실패: ${char.imgHitSrc}`); } else { resolve(); } })
+            ]);
+            promises.push(new Promise((resolve, reject) => { cloverImg.src = './clover.png'; cloverImg.onload = resolve; cloverImg.onerror = () => reject('이미지 로드 실패: clover.png'); }));
+            promises.push(new Promise((resolve, reject) => { loveImg.src = './love.png'; loveImg.onload = resolve; loveImg.onerror = () => reject('이미지 로드 실패: love.png'); }));
+            promises.push(new Promise((resolve, reject) => { bombImg.src = './bomb.png'; bombImg.onload = resolve; bombImg.onerror = () => reject('이미지 로드 실패: bomb.png'); }));
+            promises.push(new Promise((resolve, reject) => { cloverTitleImg.src = './clover_title.png'; cloverTitleImg.onload = resolve; cloverTitleImg.onerror = () => reject('이미지 로드 실패: clover_title.png'); }));
+            promises.push(new Promise((resolve, reject) => { darkGrayBtnImg.src = './darkgray.png'; darkGrayBtnImg.onload = resolve; darkGrayBtnImg.onerror = () => reject('이미지 로드 실패: darkgray.png'); }));
+            promises.push(new Promise((resolve, reject) => { lightGrayBtnImg.src = './lightgray.png'; lightGrayBtnImg.onload = resolve; lightGrayBtnImg.onerror = () => reject('이미지 로드 실패: lightgray.png'); }));
+            promises.push(new Promise((resolve, reject) => { majorImg.src = './major.png'; majorImg.onload = resolve; majorImg.onerror = () => reject('이미지 로드 실패: major.png'); }));
+            promises.push(new Promise((resolve, reject) => { yellowImg.src = './yellow.png'; yellowImg.onload = resolve; yellowImg.onerror = () => reject('이미지 로드 실패: yellow.png'); }));
+            promises.push(new Promise((resolve, reject) => { grayImg.src = './gray.png'; grayImg.onload = resolve; grayImg.onerror = () => reject('이미지 로드 실패: gray.png'); }));
+            return Promise.all(promises);
+        }
 
-        function playSound(src, volume = 1.0) {
-            if (!src || !hasInteracted) return;
-            const audio = new Audio(src);
-            audio.volume = volume;
-            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
-        }
+        function playSound(src, volume = 1.0) {
+            if (!src || !hasInteracted || (isMuted && src !== BUTTON_CLICK_SFX_SRC)) return;
+            if (isMuted && src === BUTTON_CLICK_SFX_SRC) volume = 1.0;
+            const audio = new Audio(src);
+            audio.volume = volume;
+            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
+        }
 
-        function init() {
-            const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
-            const playerWidth = GAME_WIDTH * 0.2;
-            const aspectRatio = selectedCharacter.originalHeight / selectedCharacter.originalWidth;
-            const playerHeight = playerWidth * aspectRatio;
-            player = { width: playerWidth, height: playerHeight, x: GAME_WIDTH / 2 - playerWidth / 2, y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), speed: selectedCharacter.speed, img: selectedCharacter.img, originalImg: selectedCharacter.img, hitImg: selectedCharacter.imgHit, hitTimer: 0, dx: 0 };
-            targetX = player.x; objects = []; score = 0; spawnTimer = 0;
-            gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
-            lives = MAX_LIVES;
-            gameState = 'playing';
-            bgm.currentTime = 0;
-            bgm.volume = BGM_VOLUME_NORMAL;
-            bgm.play();
-        }
-        
-        function resizeCanvas() {
-            const viewportWidth = window.innerWidth; const viewportHeight = window.innerHeight;
-            const scale = Math.min(viewportWidth / GAME_WIDTH, viewportHeight / GAME_HEIGHT);
-            const newCssWidth = GAME_WIDTH * scale; const newCssHeight = GAME_HEIGHT * scale;
-            canvas.style.width = `${newCssWidth}px`; canvas.style.height = `${newCssHeight}px`;
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = GAME_WIDTH * dpr; canvas.height = GAME_HEIGHT * dpr;
-            ctx.scale(dpr, dpr);
-            drawCurrentState();
-        }
+        function init() {
+            const rect = canvas.getBoundingClientRect();
+            const selectedCharacter = characters.find(c => c.id === selectedCharacterId);
+            const displayWidth = selectedCharacter.originalWidth; const displayHeight = selectedCharacter.originalHeight;
+            const MAX_PLAYER_SIZE = rect.width * 0.15;
+            let playerWidth = displayWidth; let playerHeight = displayHeight;
+            if (playerWidth > MAX_PLAYER_SIZE || playerHeight > MAX_PLAYER_SIZE) { const aspectRatio = displayWidth / displayHeight; if (aspectRatio > 1) { playerWidth = MAX_PLAYER_SIZE; playerHeight = MAX_PLAYER_SIZE / aspectRatio; } else { playerHeight = MAX_PLAYER_SIZE; playerWidth = MAX_PLAYER_SIZE * aspectRatio; } }
+            player = { width: playerWidth, height: playerHeight, x: rect.width / 2 - playerWidth / 2, y: rect.height - playerHeight - (rect.height * 0.1), speed: selectedCharacter.speed, img: selectedCharacter.img, originalImg: selectedCharacter.img, hitImg: selectedCharacter.imgHit, hitTimer: 0, dx: 0 };
+            targetX = player.x; objects = []; score = 0; spawnTimer = 0;
+            gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
+            lives = MAX_LIVES;
+            gameState = 'playing';
+            bgm.currentTime = 0;
+            bgm.volume = BGM_VOLUME_NORMAL;
+            if(!bgm.paused) bgm.play();
+        }
+        
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            let newWidth, newHeight;
+            const screenRatio = viewportWidth / viewportHeight;
+            const gameRatio = GAME_WIDTH / GAME_HEIGHT;
+            if (screenRatio < 1) { 
+                if (screenRatio > gameRatio) { newHeight = viewportHeight; newWidth = newHeight * gameRatio; }
+                else { newWidth = viewportWidth; newHeight = newWidth / gameRatio; }
+            } else { newWidth = viewportWidth; newHeight = viewportHeight; }
+            canvas.style.width = `${newWidth}px`;
+            canvas.style.height = `${newHeight}px`;
+            canvas.width = newWidth * dpr;
+            canvas.height = newHeight * dpr;
+            ctx.scale(dpr, dpr);
+            drawCurrentState();
+        }
 
-        function drawCurrentState() {
-            const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
-            canvas.style.backgroundColor = bgColor;
-            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            if (gameState === 'loading') { ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); }
-            else if (gameState === 'startScreen') { drawStartScreen(); }
-            else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawUI(); }
-            else if (gameState === 'paused') { drawPauseScreen(); }
-            else if (gameState === 'gameOver') { drawGameOver(); }
-        }
-        
-        function getEventPos(e) { 
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const gameX = (clientX - rect.left) / rect.width * GAME_WIDTH;
-            const gameY = (clientY - rect.top) / rect.height * GAME_HEIGHT;
-            return { x: gameX, y: gameY };
-        }
-        function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
-        
-        function drawPlayer() {
-            let currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg;
-            if (currentImg) { ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
-        }
-        
-        function drawObjects() {
-            objects.forEach(obj => {
-                let imgToDraw;
-                if (obj.type === 'good') imgToDraw = cloverImg;
-                else if (obj.type === 'special') imgToDraw = loveImg;
-                else if (obj.type === 'bad') imgToDraw = bombImg;
-                if (imgToDraw && imgToDraw.complete) { ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }
-            });
-        }
-        
-        function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
-        function drawLeaderboardScreen() {
-            let listStartY = GAME_HEIGHT * 0.15; 
-            if (majorImg.complete && majorImg.naturalWidth > 0) {
-                const imgWidth = GAME_WIDTH * 0.6;
-                const imgHeight = (majorImg.naturalHeight / majorImg.naturalWidth) * imgWidth;
-                const imgY = GAME_HEIGHT * 0.05;
-                ctx.drawImage(majorImg, (GAME_WIDTH - imgWidth) / 2, imgY, imgWidth, imgHeight);
-                listStartY = imgY + imgHeight + 20;
-            }
-            const listHeight = GAME_HEIGHT - listStartY - 100;
-            const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
-            if (cachedLeaderboard === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, listStartY + 50); }
-            else if (cachedLeaderboard.length === 0) { ctx.font = '20px "MyGameFont"'; ctx.fillText('아직 기록이 없습니다!', GAME_WIDTH / 2, listStartY + 50); }
-            else { 
-                const leaderboardItemsHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
-                const scrollableAreaHeight = listHeight;
-                const maxScroll = 0; 
-                const minScroll = -Math.max(0, leaderboardItemsHeight - scrollableAreaHeight);
-                if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll; 
-                if (leaderboardScrollY < minScroll) leaderboardScrollY = minScroll;
-                ctx.save(); 
-                ctx.beginPath(); 
-                ctx.rect(0, listStartY, GAME_WIDTH, scrollableAreaHeight);
-                ctx.clip();
-                cachedLeaderboard.forEach((entry, index) => {
-                    const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
-                    const boxImg = index < 3 ? yellowImg : grayImg;
-                    if (boxImg.complete) { ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight); }
-                    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
-                    const character = characters.find(c => c.name === entry.character);
-                    if (character && character.imgIcon) {
-                        const iconSize = 24; const iconX = rankTextX + 35;
-                        ctx.drawImage(character.imgIcon, iconX, boxY + (boxHeight - iconSize) / 2, iconSize, iconSize);
-                        ctx.textAlign = 'left';
-                        ctx.fillText(entry.name, iconX + iconSize + 10, boxY + 25);
-                    } else { ctx.textAlign = 'left'; ctx.fillText(entry.name, rankTextX + 35, boxY + 25); }
-                    ctx.fillText(`${index + 1}.`, rankTextX, boxY + 25);
-                    ctx.textAlign = 'right';
-                    ctx.fillText(entry.score, (GAME_WIDTH + boxWidth) / 2 - 20, boxY + 25);
-                });
-                ctx.restore();
-            }
-            drawConfirmButton(GAME_HEIGHT * 0.9);
-        }
-        function drawCharacterSelectScreen() {
-            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('캐릭터를 선택하세요', GAME_WIDTH / 2, GAME_HEIGHT * 0.15);
-            const displayCharSize = Math.min(GAME_WIDTH / 4, 100); const gap = 20;
-            const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
-            let startX = (GAME_WIDTH - totalWidth) / 2;
-            const boxY = (GAME_HEIGHT - displayCharSize) / 2 - 50;
-            uiBoxes.characterBoxes = [];
-            characters.forEach(char => {
-                const isSelected = char.id === selectedCharacterId;
-                const scale = isSelected ? 1.2 : 1.0;
-                const currentSize = displayCharSize * scale;
-                const currentX = startX - (currentSize - displayCharSize) / 2;
-                const currentY = boxY - (currentSize - displayCharSize) / 2;
-                let imgToDraw = isSelected ? char.imgSelected : char.img;
-                let imgDrawWidth = currentSize; let imgDrawHeight = currentSize;
-                if (char.originalWidth && char.originalHeight) { const aspectRatio = char.originalWidth / char.originalHeight; if (aspectRatio > 1) { imgDrawHeight = currentSize / aspectRatio; } else { imgDrawWidth = currentSize * aspectRatio; } }
-                const imgDrawX = currentX + (currentSize - imgDrawWidth) / 2; const imgDrawY = currentY + (currentSize - imgDrawHeight) / 2;
-                if (imgToDraw) { ctx.drawImage(imgToDraw, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
-                ctx.fillStyle = '#2c3e50'; ctx.font = '20px "MyGameFont"'; ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
-                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
-                startX += displayCharSize + gap;
-            });
-            drawConfirmButton(GAME_HEIGHT * 0.8);
-        }
-        function drawMainMenu() {
-            let currentY = GAME_HEIGHT * 0.1;
-            if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
-                const imgWidth = GAME_WIDTH * 0.7; 
-                const imgHeight = (cloverTitleImg.naturalHeight / cloverTitleImg.naturalWidth) * imgWidth;
-                const imgX = (GAME_WIDTH - imgWidth) / 2;
-                ctx.drawImage(cloverTitleImg, imgX, currentY, imgWidth, imgHeight);
-                currentY += imgHeight + 20;
-            }
-            ctx.fillStyle = '#2c3e50'; ctx.font = '18px "MyGameFont"'; ctx.textAlign = 'center';
-            const lineHeight = 28; const iconSize = 20;
-            currentY += 20;
-            ctx.fillText('<게임방법>', GAME_WIDTH / 2, currentY);
-            currentY += lineHeight * 1.5;
-            function drawLineWithIconAndColor(text, icon, y, textColor = '#2c3e50') { const textWidth = ctx.measureText(text).width; const totalWidth = iconSize + 5 + textWidth; const startX = (GAME_WIDTH - totalWidth) / 2; if (icon && icon.complete) { ctx.drawImage(icon, startX, y - iconSize, iconSize, iconSize); } ctx.textAlign = 'left'; ctx.fillStyle = textColor; ctx.fillText(text, startX + iconSize + 5, y); ctx.fillStyle = '#2c3e50'; }
-            ctx.textAlign = 'left';
-            drawLineWithIconAndColor('를 많이 받아 점수를 내는 게임입니다!', cloverImg, currentY);
-            currentY += lineHeight;
-            const line2_part1 = '를 10번 받아 '; const line2_part2 = 'LOVE'; const line2_part3 = ' 게이지가 가득 차면';
-            const line2_part1Width = ctx.measureText(line2_part1).width; const line2_part2Width = ctx.measureText(line2_part2).width;
-            const line2TotalWidth = iconSize + 5 + line2_part1Width + line2_part2Width + ctx.measureText(line2_part3).width;
-            const line2StartX = (GAME_WIDTH - line2TotalWidth) / 2;
-            if (loveImg.complete) ctx.drawImage(loveImg, line2StartX, currentY - iconSize, iconSize, iconSize);
-            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
-            ctx.fillText(line2_part1, line2StartX + iconSize + 5, currentY);
-            ctx.fillStyle = '#ff69b4';
-            ctx.fillText(line2_part2, line2StartX + iconSize + 5 + line2_part1Width, currentY);
-            ctx.fillStyle = '#2c3e50';
-            ctx.fillText(line2_part3, line2StartX + iconSize + 5 + line2_part1Width + line2_part2Width, currentY);
-            currentY += lineHeight;
-            const text1 = "CLOVER TIME"; const text2 = "이 발동합니다";
-            const text1Width = ctx.measureText(text1).width; const totalTextWidth = text1Width + ctx.measureText(text2).width;
-            let textStartX = (GAME_WIDTH - totalTextWidth) / 2;
-            ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60';
-            ctx.fillText(text1, textStartX, currentY);
-            ctx.fillStyle = '#2c3e50'; ctx.fillText(text2, textStartX + text1Width, currentY);
-            currentY += lineHeight;
-            const line4_part1 = '를 세 번 받으면 '; const line4_part2 = 'GAME OVER!';
-            const line4_part1Width = ctx.measureText(line4_part1).width; const line4TotalWidth = iconSize + 5 + line4_part1Width + ctx.measureText(line4_part2).width;
-            const line4StartX = (GAME_WIDTH - line4TotalWidth) / 2;
-            if (bombImg.complete) ctx.drawImage(bombImg, line4StartX, currentY - iconSize, iconSize, iconSize);
-            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
-            ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
-            ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY);
-            ctx.fillStyle = '#2c3e50';
-            currentY += lineHeight;
-            ctx.textAlign = 'center';
-            const line5_part1 = "점수가 TOP 10 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
-            const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
-            const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
-            const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
-            ctx.textAlign = 'left'; ctx.fillText(line5_part1, line5StartX, currentY);
-            ctx.fillStyle = '#e67e22'; ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
-            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY);
-            currentY += lineHeight;
-            ctx.textAlign = 'center';
-            ctx.fillText('재미있게 즐겨주세요!❤️', GAME_WIDTH / 2, currentY);
-            currentY += 40;
-            const btnWidth = Math.min(GAME_WIDTH * 0.7, 300); const btnHeight = Math.min(GAME_HEIGHT * 0.08, 60);
-            const gap = btnHeight * 0.5;
-            const btnX = (GAME_WIDTH - btnWidth) / 2;
-            const btnFontSize = Math.min(btnHeight * 0.4, 24); ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
-            let buttonStartY = currentY;
-            uiBoxes.charSelectBtn = { x: btnX, y: buttonStartY, width: btnWidth, height: btnHeight };
-            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('캐릭터 선택', GAME_WIDTH / 2, buttonStartY + btnHeight / 2 + (btnFontSize / 3));
-            uiBoxes.leaderboardBtn = { x: btnX, y: buttonStartY + btnHeight + gap, width: btnWidth, height: btnHeight };
-            if (lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, btnX, buttonStartY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'black'; ctx.textAlign = 'center'; ctx.fillText('명예의 전당', GAME_WIDTH / 2, buttonStartY + btnHeight + gap + btnHeight / 2 + (btnFontSize / 3));
-            uiBoxes.startBtn = { x: btnX, y: buttonStartY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
-            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('게임 시작', GAME_WIDTH / 2, buttonStartY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
-        }
-        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } }
-        function drawPauseScreen() {
-            drawObjects(); drawPlayer(); drawUI(false);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            const btnWidth = 200, btnHeight = 60, gap = 30;
-            const centerX = GAME_WIDTH / 2; const centerY = GAME_HEIGHT / 2;
-            uiBoxes.resumeBtn = { x: centerX - btnWidth / 2, y: centerY - btnHeight - gap / 2, width: btnWidth, height: btnHeight };
-            if(lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
-            ctx.fillStyle = 'black'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center';
-            ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
-            uiBoxes.toMainBtn = { x: centerX - btnWidth / 2, y: centerY + gap / 2, width: btnWidth, height: btnHeight };
-            if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
-            ctx.fillStyle = 'white';
-            ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
-        }
-        function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); ctx.font = '24px "MyGameFont"'; ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save Score', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); }
-        function drawUI(drawButton = true) {
-            ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'left';
-            ctx.fillText(`Score: ${score}`, 15, 30);
-            const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45;
-            ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
-            const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT;
-            ctx.fillStyle = '#ff69b4';
-            ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
-            ctx.fillStyle = '#ff69b4';
-            ctx.font = '16px "MyGameFont"';
-            ctx.fillText('LOVE', gaugeX + gaugeWidth + 10, gaugeY + 16);
-            ctx.textAlign = 'left';
-            let hearts = '';
-            for (let i = 0; i < MAX_LIVES; i++) { hearts += (i < lives) ? '❤️' : '🖤'; }
-            ctx.font = '24px Arial';
-            ctx.fillText(hearts, 15, gaugeY + gaugeHeight + 25);
-            if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText(`CLOVER TIME!`, GAME_WIDTH / 2, 120); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, GAME_WIDTH / 2, 160); }
-            if (drawButton) { const btnSize = 40, margin = 15; const btnX = GAME_WIDTH - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
-        }
+        function drawCurrentState() {
+            const rect = canvas.getBoundingClientRect();
+            const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            if (gameState === 'loading') { ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', rect.width / 2, rect.height / 2); }
+            else if (gameState === 'startScreen') { drawStartScreen(); }
+            else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawUI(); }
+            else if (gameState === 'paused') { drawPauseScreen(); }
+            else if (gameState === 'gameOver') { drawGameOver(); }
+        }
+        
+        function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+        function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
+        
+        function drawPlayer() {
+            let currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg;
+            if (currentImg) { ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
+        }
+        
+        function drawObjects() {
+            objects.forEach(obj => {
+                let imgToDraw;
+                if (obj.type === 'good') imgToDraw = cloverImg;
+                else if (obj.type === 'special') imgToDraw = loveImg;
+                else if (obj.type === 'bad') imgToDraw = bombImg;
+                if (imgToDraw && imgToDraw.complete) { ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }
+            });
+        }
+        
+        function drawConfirmButton(yPos) { const rect = canvas.getBoundingClientRect(); const btnWidth = 150, btnHeight = 50; const btnX = (rect.width - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', rect.width / 2, yPos + 32); }
+        
+        function drawLeaderboardScreen() {
+            const rect = canvas.getBoundingClientRect();
+            let listStartY = rect.height * 0.15;
+            if (majorImg.complete && majorImg.naturalWidth > 0) {
+                const imgWidth = rect.width * 0.6;
+                const imgHeight = (majorImg.naturalHeight / majorImg.naturalWidth) * imgWidth;
+                const imgY = rect.height * 0.05;
+                ctx.drawImage(majorImg, (rect.width - imgWidth) / 2, imgY, imgWidth, imgHeight);
+                ctx.fillStyle = '#6c757d'; ctx.font = '14px "MyGameFont"'; ctx.textAlign = 'center';
+                const warningTextY = imgY + imgHeight + 15;
+                ctx.fillText('*타인에게 상처를 주는 닉네임은 예고 없이 삭제될 수 있습니다', rect.width / 2, warningTextY);
+                listStartY = warningTextY + 20;
+            }
+            const listHeight = rect.height - listStartY - 100;
+            const boxWidth = Math.min(rect.width * 0.8, 350); const boxHeight = 40, gap = 10;
+            if (cachedLeaderboard === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('로딩 중...', rect.width / 2, listStartY + 50); }
+            else if (cachedLeaderboard.length === 0) { ctx.font = '20px "MyGameFont"'; ctx.fillText('아직 기록이 없습니다!', rect.width / 2, listStartY + 50); }
+            else { 
+                const leaderboardItemsHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
+                const scrollableAreaHeight = listHeight;
+                const maxScroll = 0; 
+                const minScroll = -Math.max(0, leaderboardItemsHeight - scrollableAreaHeight);
+                if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll; 
+                if (leaderboardScrollY < minScroll) leaderboardScrollY = minScroll;
+                ctx.save(); 
+                ctx.beginPath(); 
+                ctx.rect(0, listStartY, rect.width, scrollableAreaHeight);
+                ctx.clip();
+                cachedLeaderboard.forEach((entry, index) => {
+                    const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
+                    const boxImg = index < 3 ? yellowImg : grayImg;
+                    if (boxImg.complete) { ctx.drawImage(boxImg, (rect.width - boxWidth) / 2, boxY, boxWidth, boxHeight); }
+                    ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (rect.width - boxWidth) / 2 + 20;
+                    const character = characters.find(c => c.name === entry.character);
+                    if (character && character.imgIcon) {
+                        const iconSize = 24; const iconX = rankTextX + 35;
+                        ctx.drawImage(character.imgIcon, iconX, boxY + (boxHeight - iconSize) / 2, iconSize, iconSize);
+                        ctx.textAlign = 'left';
+                        ctx.fillText(entry.name, iconX + iconSize + 10, boxY + 25);
+                    } else { ctx.textAlign = 'left'; ctx.fillText(entry.name, rankTextX + 35, boxY + 25); }
+                    ctx.fillText(`${index + 1}.`, rankTextX, boxY + 25);
+                    ctx.textAlign = 'right';
+                    ctx.fillText(entry.score, (rect.width + boxWidth) / 2 - 20, boxY + 25);
+                });
+                ctx.restore();
+            }
+            drawConfirmButton(rect.height * 0.9);
+        }
+        
+        function drawCharacterSelectScreen() {
+            const rect = canvas.getBoundingClientRect();
+            ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('캐릭터를 선택하세요', rect.width / 2, rect.height * 0.15);
+            const displayCharSize = Math.min(rect.width / 4, 100); const gap = 20;
+            const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
+            let startX = (rect.width - totalWidth) / 2;
+            const boxY = (rect.height - displayCharSize) / 2 - 50;
+            uiBoxes.characterBoxes = [];
+            characters.forEach(char => {
+                const isSelected = char.id === selectedCharacterId;
+                const scale = isSelected ? 1.2 : 1.0;
+                const currentSize = displayCharSize * scale;
+                const currentX = startX - (currentSize - displayCharSize) / 2;
+                const currentY = boxY - (currentSize - displayCharSize) / 2;
+                let imgToDraw = isSelected ? char.imgSelected : char.img;
+                let imgDrawWidth = currentSize; let imgDrawHeight = currentSize;
+                if (char.originalWidth && char.originalHeight) { const aspectRatio = char.originalWidth / char.originalHeight; if (aspectRatio > 1) { imgDrawHeight = currentSize / aspectRatio; } else { imgDrawWidth = currentSize * aspectRatio; } }
+                const imgDrawX = currentX + (currentSize - imgDrawWidth) / 2; const imgDrawY = currentY + (currentSize - imgDrawHeight) / 2;
+                if (imgToDraw) { ctx.drawImage(imgToDraw, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight); }
+                ctx.fillStyle = '#2c3e50'; ctx.font = '20px "MyGameFont"'; ctx.fillText(char.name, startX + displayCharSize / 2, boxY + displayCharSize + 30);
+                uiBoxes.characterBoxes.push({ id: char.id, x: startX, y: boxY, width: displayCharSize, height: displayCharSize });
+                startX += displayCharSize + gap;
+            });
+            drawConfirmButton(rect.height * 0.8);
+        }
+        
+        function drawMainMenu() {
+            const rect = canvas.getBoundingClientRect();
+            let currentY = rect.height * 0.1;
+            if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
+                const imgWidth = rect.width * 0.7; 
+                const imgHeight = (cloverTitleImg.naturalHeight / cloverTitleImg.naturalWidth) * imgWidth;
+                const imgX = (rect.width - imgWidth) / 2;
+                ctx.drawImage(cloverTitleImg, imgX, currentY, imgWidth, imgHeight);
+                currentY += imgHeight + 20;
+            }
+            ctx.fillStyle = '#2c3e50'; ctx.font = '18px "MyGameFont"'; ctx.textAlign = 'center';
+            const lineHeight = 28; const iconSize = 20;
+            currentY += 20;
+            ctx.fillText('<게임방법>', rect.width / 2, currentY);
+            currentY += lineHeight * 1.5;
+            function drawLineWithIconAndColor(text, icon, y, textColor = '#2c3e50') { const textWidth = ctx.measureText(text).width; const totalWidth = iconSize + 5 + textWidth; const startX = (rect.width - totalWidth) / 2; if (icon && icon.complete) { ctx.drawImage(icon, startX, y - iconSize, iconSize, iconSize); } ctx.textAlign = 'left'; ctx.fillStyle = textColor; ctx.fillText(text, startX + iconSize + 5, y); ctx.fillStyle = '#2c3e50'; }
+            ctx.textAlign = 'left';
+            drawLineWithIconAndColor('를 많이 받아 점수를 내는 게임입니다!', cloverImg, currentY);
+            currentY += lineHeight;
+            const line2_part1 = '를 10번 받아 '; const line2_part2 = 'LOVE'; const line2_part3 = ' 게이지가 가득 차면';
+            const line2_part1Width = ctx.measureText(line2_part1).width; const line2_part2Width = ctx.measureText(line2_part2).width;
+            const line2TotalWidth = iconSize + 5 + line2_part1Width + line2_part2Width + ctx.measureText(line2_part3).width;
+            const line2StartX = (rect.width - line2TotalWidth) / 2;
+            if (loveImg.complete) ctx.drawImage(loveImg, line2StartX, currentY - iconSize, iconSize, iconSize);
+            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line2_part1, line2StartX + iconSize + 5, currentY);
+            ctx.fillStyle = '#ff69b4';
+            ctx.fillText(line2_part2, line2StartX + iconSize + 5 + line2_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line2_part3, line2StartX + iconSize + 5 + line2_part1Width + line2_part2Width, currentY);
+            currentY += lineHeight;
+            const text1 = "CLOVER TIME"; const text2 = "이 발동합니다";
+            const text1Width = ctx.measureText(text1).width; const totalTextWidth = text1Width + ctx.measureText(text2).width;
+            let textStartX = (rect.width - totalTextWidth) / 2;
+            ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60';
+            ctx.fillText(text1, textStartX, currentY);
+            ctx.fillStyle = '#2c3e50'; ctx.fillText(text2, textStartX + text1Width, currentY);
+            currentY += lineHeight;
+            const line4_part1 = '를 세 번 받으면 '; const line4_part2 = 'GAME OVER!';
+            const line4_part1Width = ctx.measureText(line4_part1).width; const line4TotalWidth = iconSize + 5 + line4_part1Width + ctx.measureText(line4_part2).width;
+            const line4StartX = (rect.width - line4TotalWidth) / 2;
+            if (bombImg.complete) ctx.drawImage(bombImg, line4StartX, currentY - iconSize, iconSize, iconSize);
+            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
+            ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50';
+            currentY += lineHeight;
+            ctx.textAlign = 'center';
+            const line5_part1 = "점수가 TOP 10 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
+            const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
+            const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
+            const line5StartX = (rect.width - line5TotalWidth) / 2;
+            ctx.textAlign = 'left'; ctx.fillText(line5_part1, line5StartX, currentY);
+            ctx.fillStyle = '#e67e22'; ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY);
+            currentY += lineHeight;
+            ctx.textAlign = 'center';
+            ctx.fillText('재미있게 즐겨주세요!❤️', rect.width / 2, currentY);
+            currentY += 40;
+            const btnWidth = Math.min(rect.width * 0.7, 300); const btnHeight = Math.min(rect.height * 0.08, 60);
+            const gap = btnHeight * 0.5;
+            const btnX = (rect.width - btnWidth) / 2;
+            const btnFontSize = Math.min(btnHeight * 0.4, 24); ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
+            let buttonStartY = currentY;
+            uiBoxes.charSelectBtn = { x: btnX, y: buttonStartY, width: btnWidth, height: btnHeight };
+            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('캐릭터 선택', rect.width / 2, buttonStartY + btnHeight / 2 + (btnFontSize / 3));
+            uiBoxes.leaderboardBtn = { x: btnX, y: buttonStartY + btnHeight + gap, width: btnWidth, height: btnHeight };
+            if (lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, btnX, buttonStartY + btnHeight + gap, btnWidth, btnHeight);
+            ctx.fillStyle = 'black'; ctx.textAlign = 'center'; ctx.fillText('명예의 전당', rect.width / 2, buttonStartY + btnHeight + gap + btnHeight / 2 + (btnFontSize / 3));
+            uiBoxes.startBtn = { x: btnX, y: buttonStartY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
+            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 2, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('게임 시작', rect.width / 2, buttonStartY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
+        }
+        
+        function drawStartScreen() { uiBoxes = {}; const rect = canvas.getBoundingClientRect(); ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, rect.width, rect.height); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } }
+        
+        function drawPauseScreen() {
+            const rect = canvas.getBoundingClientRect();
+            drawObjects(); drawPlayer(); drawUI(false);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+            const btnWidth = 200, btnHeight = 60, gap = 30;
+            const centerX = rect.width / 2; const centerY = rect.height / 2;
+            uiBoxes.resumeBtn = { x: centerX - btnWidth / 2, y: centerY - btnHeight - gap / 2, width: btnWidth, height: btnHeight };
+            if(lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, uiBoxes.resumeBtn.x, uiBoxes.resumeBtn.y, uiBoxes.resumeBtn.width, uiBoxes.resumeBtn.height);
+            ctx.fillStyle = 'black'; ctx.font = 'bold 24px "MyGameFont"'; ctx.textAlign = 'center';
+            ctx.fillText('계속하기', centerX, centerY - btnHeight / 2 - gap / 2 + 8);
+            uiBoxes.toMainBtn = { x: centerX - btnWidth / 2, y: centerY + gap / 2, width: btnWidth, height: btnHeight };
+            if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, uiBoxes.toMainBtn.x, uiBoxes.toMainBtn.y, uiBoxes.toMainBtn.width, uiBoxes.toMainBtn.height);
+            ctx.fillStyle = 'white';
+            ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
+        }
+        
+        function drawGameOver() { const rect = canvas.getBoundingClientRect(); ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, rect.width, rect.height); ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', rect.width / 2, rect.height / 2 - 40); ctx.font = '24px "MyGameFont"'; ctx.fillText(`Final Score: ${score}`, rect.width / 2, rect.height / 2); ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save Score', rect.width / 2, rect.height / 2 + 40); }
+        
+        function drawUI(drawButton = true) {
+            const rect = canvas.getBoundingClientRect();
+            ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'left';
+            ctx.fillText(`Score: ${score}`, 15, 30);
+            const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45;
+            ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
+            const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT;
+            ctx.fillStyle = '#ff69b4';
+            ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
+            ctx.fillStyle = '#ff69b4';
+            ctx.font = '16px "MyGameFont"';
+            ctx.fillText('LOVE', gaugeX + gaugeWidth + 10, gaugeY + 16);
+            ctx.textAlign = 'left';
+            let hearts = '';
+            for (let i = 0; i < MAX_LIVES; i++) { hearts += (i < lives) ? '❤️' : '🖤'; }
+            ctx.font = '24px Arial';
+            ctx.fillText(hearts, 15, gaugeY + gaugeHeight + 25);
+            if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText(`CLOVER TIME!`, rect.width / 2, 120); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, rect.width / 2, 160); }
+            if (drawButton) { const btnSize = 40, margin = 15; const btnX = rect.width - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
+        }
 
-        function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > GAME_WIDTH) player.x = GAME_WIDTH - player.width; }
-        
-        function updateObjects(deltaTime) {
-            spawnTimer += deltaTime; 
-            gameSpeedMultiplier = 1 + (score * 0.01);
-            if (player.hitTimer > 0) { player.hitTimer -= deltaTime; }
-            if (isFeverTime) {
-                feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
-                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (GAME_WIDTH - 40), y: -40, width: 40, height: 40, speed: 200, type: 'good' }); spawnTimer = 0; }
-            } else {
-                if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
-                    let type = 'good';
-                    const rand = Math.random();
-                    if (rand < 0.3) { type = 'bad'; }
-                    else if (rand < 0.45) { type = 'special'; }
-                    objects.push({ x: Math.random() * (GAME_WIDTH - 40), y: -40, width: 40, height: 40, speed: (1.5 + Math.random() * 2) * 100, type: type });
-                    spawnTimer = 0;
-                }
-            }
-            for (let i = objects.length - 1; i >= 0; i--) {
-                const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
-                if (obj.y > GAME_HEIGHT) { objects.splice(i, 1); continue; }
-                if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
-                    if (obj.type === 'bad') {
-                        lives--;
-                        objects.splice(i, 1);
-                        player.hitTimer = 500;
-                        const selectedChar = characters.find(c => c.id === selectedCharacterId);
-                        if (selectedChar) playSound(selectedChar.hitSfxSrc, selectedChar.hitVolume);
-                        playSound(BOMB_HIT_SFX_SRC, 1.0);
-                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound(GAME_OVER_SFX_SRC); }
-                    } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
-                    else { score++; objects.splice(i, 1); }
-                }
-            }
-        }
+        function movePlayer() { const rect = canvas.getBoundingClientRect(); if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > rect.width) player.x = rect.width - player.width; }
+        
+        function updateObjects(deltaTime) {
+            const rect = canvas.getBoundingClientRect();
+            spawnTimer += deltaTime; gameSpeedMultiplier = 1 + (score * 0.01);
+            if (player.hitTimer > 0) { player.hitTimer -= deltaTime; }
+            if (isFeverTime) {
+                feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
+                if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (rect.width - 40), y: -40, width: 40, height: 40, speed: 200, type: 'good' }); spawnTimer = 0; }
+            } else {
+                if (spawnTimer > BASE_SPAWN_INTERVAL / gameSpeedMultiplier) {
+                    let type = 'good';
+                    const rand = Math.random();
+                    if (rand < 0.3) { type = 'bad'; }
+                    else if (rand < 0.45) { type = 'special'; }
+                    objects.push({ x: Math.random() * (rect.width - 40), y: -40, width: 40, height: 40, speed: (1.5 + Math.random() * 2) * 100, type: type });
+                    spawnTimer = 0;
+                }
+            }
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i];
+                obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
+                if (obj.y > rect.height) { objects.splice(i, 1); continue; }
+                if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
+                    if (obj.type === 'bad') {
+                        lives--;
+                        objects.splice(i, 1);
+                        player.hitTimer = 500;
+                        const selectedChar = characters.find(c => c.id === selectedCharacterId);
+                        if (selectedChar) playSound(selectedChar.hitSfxSrc, selectedChar.hitVolume);
+                        playSound(BOMB_HIT_SFX_SRC, 1.0);
+                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound(GAME_OVER_SFX_SRC); }
+                    } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
+                    else { score++; objects.splice(i, 1); }
+                }
+            }
+        }
 
-        async function handleInteractionStart(e) {
-            e.preventDefault(); const pos = getEventPos(e);
-            if (!hasInteracted) {
-                hasInteracted = true;
-                bgm.volume = BGM_VOLUME_MENU;
-                bgm.loop = true;
-                bgm.play().catch(()=>{});
-            }
-            if (gameState === 'startScreen') {
-                if (startScreenState === 'main') {
-                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'characterSelect'; }
-                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(BUTTON_CLICK_SFX_SRC); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(BUTTON_CLICK_SFX_SRC); init(); }
-                } else {
-                    if (startScreenState === 'characterSelect') { 
-                        uiBoxes.characterBoxes.forEach(box => { 
-                            if (isInside(pos, box) && selectedCharacterId !== box.id) {
-                                selectedCharacterId = box.id;
-                                const selectedChar = characters.find(c => c.id === selectedCharacterId);
-                                if (selectedChar) playSound(selectedChar.selectSfxSrc, selectedChar.selectVolume);
-                            }
-                        }); 
-                    }
-                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; }
-                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; } }
-                }
-            } else if (gameState === 'playing') {
-                if (isInside(pos, pauseButtonBox)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'paused'; bgm.pause(); }
-                else { player.dx = 0; targetX = pos.x - player.width / 2; }
-            } else if (gameState === 'paused') {
-                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
-            } else if (gameState === 'gameOver') {
-                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-                if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
-                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
-                bgm.volume = BGM_VOLUME_MENU;
-            }
-        }
-        
-        function handleInteractionMove(e) { e.preventDefault(); const pos = getEventPos(e); if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) { const deltaY = pos.y - lastTouchY; leaderboardScrollY += deltaY; lastTouchY = pos.y; } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; targetX = pos.x - player.width / 2; } }
-        function handleInteractionEnd(e) { isDragging = false; }
-        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
-        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
-        function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
-        
-        function gameLoop(timestamp) {
-            cancelAnimationFrame(animationFrameId);
-            if (gameState === 'loading') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
-            if (!lastTime) lastTime = timestamp;
-            const deltaTime = timestamp - lastTime;
-            lastTime = timestamp;
-            if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); }
-            drawCurrentState();
-            animationFrameId = requestAnimationFrame(gameLoop);
-        }
+        async function handleInteractionStart(e) {
+            e.preventDefault(); const pos = getEventPos(e);
+            if (!hasInteracted) {
+                hasInteracted = true;
+                bgm.volume = BGM_VOLUME_MENU;
+                bgm.loop = true;
+                bgm.play().catch(()=>{});
+            }
+            if (gameState === 'startScreen') {
+                if (startScreenState === 'main') {
+                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'characterSelect'; }
+                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(BUTTON_CLICK_SFX_SRC); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
+                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(BUTTON_CLICK_SFX_SRC); init(); }
+                } else {
+                    if (startScreenState === 'characterSelect') { 
+                        uiBoxes.characterBoxes.forEach(box => { 
+                            if (isInside(pos, box) && selectedCharacterId !== box.id) {
+                                selectedCharacterId = box.id;
+                                const selectedChar = characters.find(c => c.id === selectedCharacterId);
+                                if (selectedChar) playSound(selectedChar.selectSfxSrc, selectedChar.selectVolume);
+                            }
+                        }); 
+                    }
+                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; }
+                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; } }
+                }
+            } else if (gameState === 'playing') {
+                if (isInside(pos, pauseButtonBox)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'paused'; bgm.pause(); }
+                else { player.dx = 0; targetX = pos.x - player.width / 2; }
+            } else if (gameState === 'paused') {
+                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
+                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
+            } else if (gameState === 'gameOver') {
+                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
+                if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
+                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
+                bgm.volume = BGM_VOLUME_MENU;
+            }
+        }
+        
+        function handleInteractionMove(e) { e.preventDefault(); const pos = getEventPos(e); if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) { const deltaY = pos.y - lastTouchY; leaderboardScrollY += deltaY; lastTouchY = pos.y; } else if (gameState === 'playing' && (e.buttons === 1 || e.touches)) { player.dx = 0; targetX = pos.x - player.width / 2; } }
+        function handleInteractionEnd(e) { isDragging = false; }
+        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
+        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
+        function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
+        
+        function gameLoop(timestamp) {
+            cancelAnimationFrame(animationFrameId);
+            if (gameState === 'loading') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); }
+            drawCurrentState();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
 
-        // --- 이벤트 리스너 및 게임 시작점 ---
-        window.addEventListener('resize', resizeCanvas);
-        document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
-        document.addEventListener('keydown', handleKeyDown);
-        document.addEventListener('keyup', handleKeyUp);
-        canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
-        canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
-        canvas.addEventListener('touchend', handleInteractionEnd);
-        canvas.addEventListener('mousedown', handleInteractionStart);
-        canvas.addEventListener('mousemove', handleInteractionMove);
-        canvas.addEventListener('mouseup', handleInteractionEnd);
-        canvas.addEventListener('wheel', handleWheel, { passive: false });
+        // --- 이벤트 리스너 및 게임 시작점 ---
+        window.addEventListener('resize', resizeCanvas);
+        document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+        canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
+        canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
+        canvas.addEventListener('touchend', handleInteractionEnd);
+        canvas.addEventListener('mousedown', handleInteractionStart);
+        canvas.addEventListener('mousemove', handleInteractionMove);
+        canvas.addEventListener('mouseup', handleInteractionEnd);
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
 
-        initializeFirebase();
-        bgm.volume = BGM_VOLUME_MENU;
-        resizeCanvas();
-        listenForLeaderboardUpdates();
-        
-        Promise.all([loadImages(), document.fonts.ready]).then(() => {
-            gameState = 'startScreen';
-        }).catch(error => {
-            console.error(error);
-            alert('콘텐츠를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
-        });
-        
-        gameLoop(0);
-    </script>
+        initializeFirebase();
+        bgm.volume = BGM_VOLUME_MENU;
+        resizeCanvas();
+        listenForLeaderboardUpdates();
+        
+        Promise.all([loadImages(), document.fonts.ready]).then(() => {
+            gameState = 'startScreen';
+        }).catch(error => {
+            console.error(error);
+            alert('콘텐츠를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
+        });
+        
+        gameLoop(0);
+    </script>
 </body>
 </html>
