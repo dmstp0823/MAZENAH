@@ -78,7 +78,7 @@
 
         let cloverImg = new Image(), loveImg = new Image(), bombImg = new Image(), cloverTitleImg = new Image();
         let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
-        let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image(); // ✨ 순위표 이미지
+        let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image();
 
         // --- 함수 정의 ---
         
@@ -99,7 +99,6 @@
             promises.push(new Promise((resolve, reject) => { cloverTitleImg.src = './clover_title.png'; cloverTitleImg.onload = resolve; cloverTitleImg.onerror = () => reject('이미지 로드 실패: clover_title.png'); }));
             promises.push(new Promise((resolve, reject) => { darkGrayBtnImg.src = './darkgray.png'; darkGrayBtnImg.onload = resolve; darkGrayBtnImg.onerror = () => reject('이미지 로드 실패: darkgray.png'); }));
             promises.push(new Promise((resolve, reject) => { lightGrayBtnImg.src = './lightgray.png'; lightGrayBtnImg.onload = resolve; lightGrayBtnImg.onerror = () => reject('이미지 로드 실패: lightgray.png'); }));
-            // ✨ 순위표 이미지 로드
             promises.push(new Promise((resolve, reject) => { majorImg.src = './major.png'; majorImg.onload = resolve; majorImg.onerror = () => reject('이미지 로드 실패: major.png'); }));
             promises.push(new Promise((resolve, reject) => { yellowImg.src = './yellow.png'; yellowImg.onload = resolve; yellowImg.onerror = () => reject('이미지 로드 실패: yellow.png'); }));
             promises.push(new Promise((resolve, reject) => { grayImg.src = './gray.png'; grayImg.onload = resolve; grayImg.onerror = () => reject('이미지 로드 실패: gray.png'); }));
@@ -168,21 +167,37 @@
         }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         
-        // ✨ 순위표 그리기 함수 수정
+        // ✨ 순위표 그리기 함수 수정 (시작 Y 좌표 조정)
         function drawLeaderboardScreen() {
+            let listStartY = GAME_HEIGHT * 0.15; // 기본 시작 Y 위치
             if (majorImg.complete) {
                 const imgWidth = GAME_WIDTH * 0.6;
                 const imgHeight = (majorImg.naturalHeight / majorImg.naturalWidth) * imgWidth;
-                ctx.drawImage(majorImg, (GAME_WIDTH - imgWidth) / 2, GAME_HEIGHT * 0.05, imgWidth, imgHeight);
+                const imgY = GAME_HEIGHT * 0.05;
+                ctx.drawImage(majorImg, (GAME_WIDTH - imgWidth) / 2, imgY, imgWidth, imgHeight);
+                listStartY = imgY + imgHeight + 20; // 이미지 높이 + 여백
             } else {
                 ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('🏆 Top 10 🏆', GAME_WIDTH / 2, GAME_HEIGHT * 0.1);
             }
             
-            const listStartY = GAME_HEIGHT * 0.15; const listHeight = GAME_HEIGHT * 0.7; const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
+            const listHeight = GAME_HEIGHT * 0.7; // 전체 사용 가능한 높이
+            const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
             if (cachedLeaderboard === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, listStartY + 50); }
             else if (cachedLeaderboard.length === 0) { ctx.font = '20px "MyGameFont"'; ctx.fillText('아직 기록이 없습니다!', GAME_WIDTH / 2, listStartY + 50); }
-            else { const leaderboardTotalHeight = cachedLeaderboard.length * (boxHeight + gap) - gap; const maxScroll = 0; const minScroll = -Math.max(0, leaderboardTotalHeight - listHeight); if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll; if (leaderboardScrollY < minScroll) leaderboardScrollY = minScroll;
-                ctx.save(); ctx.beginPath(); ctx.rect(0, listStartY, GAME_WIDTH, listHeight); ctx.clip();
+            else { 
+                const leaderboardItemsHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
+                const scrollableAreaHeight = GAME_HEIGHT * 0.9 - listStartY - (GAME_HEIGHT * 0.1); // 버튼 위까지의 스크롤 가능 영역
+                const maxScroll = 0; 
+                const minScroll = -Math.max(0, leaderboardItemsHeight - scrollableAreaHeight); // 스크롤 범위 계산
+                
+                if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll; 
+                if (leaderboardScrollY < minScroll) leaderboardScrollY = minScroll;
+
+                ctx.save(); 
+                ctx.beginPath(); 
+                ctx.rect((GAME_WIDTH - boxWidth) / 2 - 10, listStartY - 10, boxWidth + 20, scrollableAreaHeight + 20); // 클리핑 영역 조정
+                ctx.clip();
+
                 cachedLeaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     const boxImg = index < 3 ? yellowImg : grayImg;
