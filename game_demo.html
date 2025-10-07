@@ -36,6 +36,9 @@
     <audio id="hitSfx1" src="./sounds/char1-1-1.mp3"></audio>
     <audio id="hitSfx2" src="./sounds/char2-1-1.mp3"></audio>
     <audio id="hitSfx3" src="./sounds/char3-1-1.mp3"></audio>
+    <audio id="bombHitSfx" src="./sounds/bomb_hit.mp3"></audio>
+    <audio id="buttonClickSfx" src="./sounds/button_click.mp3"></audio>
+    <audio id="gameOverSfx" src="./sounds/game_over.mp3"></audio>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -61,6 +64,9 @@
         
         const GAME_WIDTH = 540;
         const GAME_HEIGHT = 960;
+        
+        const BGM_VOLUME_NORMAL = 0.5;
+        const BGM_VOLUME_MENU = 0.2;
 
         let db, leaderboardCollection, cachedLeaderboard = null;
         const characters = [
@@ -118,7 +124,7 @@
             const sound = document.getElementById(id);
             if (sound) {
                 sound.currentTime = 0;
-                sound.play();
+                sound.play().catch(e => console.log("오디오 재생 오류:", e));
             }
         }
 
@@ -133,6 +139,7 @@
             lives = MAX_LIVES;
             gameState = 'playing';
             bgm.currentTime = 0;
+            bgm.volume = BGM_VOLUME_NORMAL;
             bgm.play();
         }
         
@@ -391,7 +398,10 @@
                         lives--;
                         objects.splice(i, 1);
                         player.hitTimer = 500;
-                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); }
+                        const selectedChar = characters.find(c => c.id === selectedCharacterId);
+                        if (selectedChar) playSound(selectedChar.hitSfxId);
+                        playSound('bombHitSfx');
+                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound('gameOverSfx'); }
                     } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
                     else { score++; objects.splice(i, 1); }
                 }
@@ -404,13 +414,14 @@
                 hasInteracted = true;
                 const allAudio = document.querySelectorAll('audio');
                 allAudio.forEach(audio => { audio.play().catch(() => {}); audio.pause(); audio.currentTime = 0; });
+                bgm.volume = BGM_VOLUME_MENU;
                 bgm.play();
             }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
-                    if (isInside(pos, uiBoxes.charSelectBtn)) startScreenState = 'characterSelect';
-                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) init();
+                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound('buttonClickSfx'); startScreenState = 'characterSelect'; }
+                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound('buttonClickSfx'); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
+                    else if (isInside(pos, uiBoxes.startBtn)) { playSound('buttonClickSfx'); init(); }
                 } else {
                     if (startScreenState === 'characterSelect') { 
                         uiBoxes.characterBoxes.forEach(box => { 
@@ -421,19 +432,20 @@
                             }
                         }); 
                     }
-                    if (isInside(pos, uiBoxes.confirmBtn)) { startScreenState = 'main'; leaderboardScrollY = 0; }
-                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { startScreenState = 'main'; leaderboardScrollY = 0; } }
+                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound('buttonClickSfx'); startScreenState = 'main'; leaderboardScrollY = 0; }
+                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound('buttonClickSfx'); startScreenState = 'main'; leaderboardScrollY = 0; } }
                 }
             } else if (gameState === 'playing') {
-                if (isInside(pos, pauseButtonBox)) { gameState = 'paused'; bgm.pause(); }
+                if (isInside(pos, pauseButtonBox)) { playSound('buttonClickSfx'); gameState = 'paused'; bgm.pause(); }
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
-                if (isInside(pos, uiBoxes.resumeBtn)) { gameState = 'playing'; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { gameState = 'startScreen'; startScreenState = 'main'; }
+                if (isInside(pos, uiBoxes.resumeBtn)) { playSound('buttonClickSfx'); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
+                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound('buttonClickSfx'); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
             } else if (gameState === 'gameOver') {
                 const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
                 if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
                 gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
+                bgm.volume = BGM_VOLUME_MENU;
             }
         }
         
@@ -468,7 +480,7 @@
         canvas.addEventListener('wheel', handleWheel, { passive: false });
 
         initializeFirebase();
-        bgm.volume = 0.5;
+        bgm.volume = BGM_VOLUME_MENU;
         resizeCanvas();
         listenForLeaderboardUpdates();
         
