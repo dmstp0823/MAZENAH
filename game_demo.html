@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>YEAH! We Are CLOVERs!</title>
-    <!-- 브라우저 탭에 표시될 파비콘을 추가하여 404 오류를 해결합니다. -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍀</text></svg>">
     <style>
         @font-face {
@@ -49,9 +48,9 @@
         const FEVER_TRIGGER_COUNT = 10;
         const BASE_SPAWN_INTERVAL = 450;
         const FEVER_SPAWN_INTERVAL = 120;
-        const SFX_POOL_SIZE = 5;
+        const SFX_POOL_SIZE = 5; // Web Audio API에서는 이 값이 더 이상 사용되지 않습니다.
         const OBJECT_POOL_SIZE = 100;
-        const MAX_SFX_PER_FRAME = 3; // 프레임당 최대 동시 재생 효과음 수
+        const MAX_SFX_PER_FRAME = 3; 
 
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
@@ -98,9 +97,10 @@
         let hasInteracted = false, isMuted = false;
         
         const loadedImages = {};
-        let sfxPool = {};
+        let sfxPool = {}; // 이제 AudioBuffer(사운드 악보)를 저장합니다.
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
+        let audioContext; // [수정] Web Audio API의 총감독(AudioContext) 변수 선언
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -111,9 +111,10 @@
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
 
-        function loadAsset(type, name, src) {
-            return new Promise((resolve, reject) => {
-                if (type === 'image') {
+        // [수정] loadAsset 함수를 Web Audio API 방식으로 완전히 교체
+        async function loadAsset(type, name, src) {
+            if (type === 'image') {
+                return new Promise((resolve, reject) => {
                     const img = new Image();
                     img.src = src;
                     img.onload = () => {
@@ -121,18 +122,23 @@
                         else { loadedImages[name] = img; resolve(); }
                     };
                     img.onerror = () => reject(`${type} 로드 실패: ${src}`);
-                } else if (type === 'sound') {
-                    const audio = new Audio();
-                    audio.src = src;
-                    audio.addEventListener('canplaythrough', () => {
-                        sfxPool[src] = { pool: [audio], currentIndex: 0 };
-                        for (let i = 1; i < SFX_POOL_SIZE; i++) sfxPool[src].pool.push(audio.cloneNode());
+                });
+            } else if (type === 'sound') {
+                if (!audioContext) return Promise.resolve();
+
+                return new Promise(async (resolve, reject) => {
+                    try {
+                        const response = await fetch(src);
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const arrayBuffer = await response.arrayBuffer();
+                        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                        sfxPool[src] = audioBuffer; // 디코딩된 오디오 데이터(악보)를 저장
                         resolve();
-                    }, { once: true });
-                    audio.onerror = (e) => reject(`${type} 로드 실패: ${src}`);
-                    audio.load();
-                }
-            });
+                    } catch (e) {
+                        reject(`${type} 로드 실패: ${src}, 오류: ${e}`);
+                    }
+                });
+            }
         }
 
         async function loadGameAssets() {
@@ -148,8 +154,9 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
+        // [수정] playSound 함수를 Web Audio API 방식으로 완전히 교체
         function playSound(src, volume = 1.0) {
-            if (!src || !hasInteracted || isMuted || !sfxPool[src]) return;
+            if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return;
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
             sfxPlayedThisFrame++;
 
@@ -159,12 +166,17 @@
                 if (sfxLastPlayed[src] && now - sfxLastPlayed[src] < cooldown) { return; }
             }
             sfxLastPlayed[src] = now;
-            const soundData = sfxPool[src];
-            const audio = soundData.pool[soundData.currentIndex];
-            audio.volume = volume;
-            audio.currentTime = 0;
-            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
-            soundData.currentIndex = (soundData.currentIndex + 1) % SFX_POOL_SIZE;
+
+            const source = audioContext.createBufferSource();
+            source.buffer = sfxPool[src];
+
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            source.start(0);
         }
 
         // --- 게임 로직 ---
@@ -256,7 +268,7 @@
             } else { score++; playSound(SOUND_ASSETS.clover); }
         }
         
-        // --- 렌더링 ---
+        // --- 렌더링 (이하 코드는 수정 없음) ---
         function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
         function drawObjects() { objectPool.forEach(obj => { if (!obj.active) return; let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
@@ -515,16 +527,19 @@
         function setRealViewportHeight() { document.body.style.height = `${window.innerHeight}px`; }
         function resizeCanvas() { const vpWidth = window.innerWidth, vpHeight = window.innerHeight; const scale = Math.min(vpWidth / GAME_WIDTH, vpHeight / GAME_HEIGHT); canvas.style.width = `${GAME_WIDTH * scale}px`; canvas.style.height = `${GAME_HEIGHT * scale}px`; const dpr = window.devicePixelRatio || 1; canvas.width = GAME_WIDTH * dpr; canvas.height = GAME_HEIGHT * dpr; ctx.scale(dpr, dpr); drawCurrentState(); }
         
+        // [수정] handleInteractionStart 함수에서 audioContext 활성화 코드 추가
         function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
             if (!hasInteracted) {
                 hasInteracted = true;
+                // 사용자가 처음 클릭했을 때 사운드 시스템을 활성화합니다.
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
                 const promise = bgm.play();
                 if (promise !== undefined) {
-                    promise.catch(error => { hasInteracted = false; }).then(() => {
-                        Object.values(sfxPool).forEach(soundData => { const audio = soundData.pool[0]; if (audio) { audio.play().catch(()=>{}); audio.pause(); audio.currentTime = 0; }});
-                    });
+                    promise.catch(error => { hasInteracted = false; });
                 }
             }
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
@@ -566,7 +581,7 @@
         // 메인 게임 루프 및 시작점 (Main Loop & Entry Point)
         // ==================================================================
         function gameLoop(timestamp) {
-            sfxPlayedThisFrame = 0; // 프레임 시작 시 카운터 초기화
+            sfxPlayedThisFrame = 0;
             cancelAnimationFrame(animationFrameId);
             if (gameState === 'loading' || gameState === 'error') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
             if (!lastTime) lastTime = timestamp;
@@ -577,7 +592,18 @@
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
+        // [수정] main 함수에서 audioContext 생성 코드 추가
         async function main() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.error("Web Audio API is not supported in this browser");
+                loadingError = "Web Audio API is not supported";
+                gameState = 'error';
+                gameLoop(0);
+                return;
+            }
+
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
@@ -610,4 +636,3 @@
     </script>
 </body>
 </html>
-
