@@ -51,6 +51,7 @@
         const FEVER_SPAWN_INTERVAL = 120;
         const SFX_POOL_SIZE = 5;
         const OBJECT_POOL_SIZE = 100;
+        const MAX_SFX_PER_FRAME = 3; // 프레임당 최대 동시 재생 효과음 수
 
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
@@ -99,6 +100,7 @@
         const loadedImages = {};
         let sfxPool = {};
         let sfxLastPlayed = {};
+        let sfxPlayedThisFrame = 0;
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -148,6 +150,9 @@
 
         function playSound(src, volume = 1.0) {
             if (!src || !hasInteracted || isMuted || !sfxPool[src]) return;
+            if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
+            sfxPlayedThisFrame++;
+
             const now = performance.now();
             const cooldown = 75;
             if (src === SOUND_ASSETS.clover) {
@@ -561,6 +566,7 @@
         // 메인 게임 루프 및 시작점 (Main Loop & Entry Point)
         // ==================================================================
         function gameLoop(timestamp) {
+            sfxPlayedThisFrame = 0; // 프레임 시작 시 카운터 초기화
             cancelAnimationFrame(animationFrameId);
             if (gameState === 'loading' || gameState === 'error') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
             if (!lastTime) lastTime = timestamp;
