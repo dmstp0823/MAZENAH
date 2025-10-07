@@ -50,6 +50,7 @@
         const BASE_SPAWN_INTERVAL = 450;
         const FEVER_SPAWN_INTERVAL = 120;
         const SFX_POOL_SIZE = 5;
+        const OBJECT_POOL_SIZE = 100; // 오브젝트 풀 크기
 
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
@@ -87,7 +88,7 @@
         let selectedCharacterId = 1;
         let uiBoxes = {}, startScreenState = 'main'; 
         let leaderboardScrollY = 0, isDragging = false, lastTouchY = 0;
-        let player, objects, score, spawnTimer, targetX, playerHitbox = {};
+        let player, objectPool, score, spawnTimer, targetX, playerHitbox = {};
         let gameState = 'loading', loadingError = null;
         let lastTime = 0, gameSpeedMultiplier = 1;
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
@@ -161,13 +162,46 @@
             const aspectRatio = char.originalHeight / char.originalWidth;
             const playerHeight = playerWidth * aspectRatio;
             player = { width: playerWidth, height: playerHeight, x: GAME_WIDTH / 2 - playerWidth / 2, y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), speed: char.speed, img: char.img, originalImg: char.img, hitImg: char.imgHit, hitTimer: 0, dx: 0 };
-            targetX = player.x; objects = []; score = 0; spawnTimer = 0;
+            targetX = player.x;
+            score = 0; spawnTimer = 0;
             gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
             lives = MAX_LIVES;
             gameState = 'playing';
+
+            objectPool = [];
+            for (let i = 0; i < OBJECT_POOL_SIZE; i++) {
+                objectPool.push({ active: false });
+            }
+
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
             if (!bgm.paused) bgm.play();
+        }
+
+        function spawnObject() {
+            const inactiveObj = objectPool.find(obj => !obj.active);
+            if (inactiveObj) {
+                inactiveObj.active = true;
+                inactiveObj.x = Math.random() * (GAME_WIDTH - 40);
+                inactiveObj.y = -40;
+                inactiveObj.width = 40;
+                inactiveObj.height = 40;
+
+                if (isFeverTime) {
+                    inactiveObj.speed = 200;
+                    inactiveObj.type = 'good';
+                } else {
+                    const bombChance = Math.min(0.5, 0.3 + (score / 500) * 0.05);
+                    const specialChance = 0.15;
+                    const rand = Math.random();
+
+                    if (rand < bombChance) inactiveObj.type = 'bad';
+                    else if (rand < bombChance + specialChance) inactiveObj.type = 'special';
+                    else inactiveObj.type = 'good';
+                    
+                    inactiveObj.speed = (1.5 + Math.random() * 2) * 100;
+                }
+            }
         }
 
         function movePlayer() {
@@ -191,25 +225,19 @@
             const spawnInterval = isFeverTime ? FEVER_SPAWN_INTERVAL : BASE_SPAWN_INTERVAL;
             if (spawnTimer > spawnInterval / gameSpeedMultiplier) {
                 spawnTimer = 0;
-                let type = 'good';
-                if (isFeverTime) {
-                    objects.push({ x: Math.random() * (GAME_WIDTH - 40), y: -40, width: 40, height: 40, speed: 200, type: 'good' });
-                } else {
-                    const rand = Math.random();
-                    if (rand < 0.3) type = 'bad';
-                    else if (rand < 0.45) type = 'special';
-                    objects.push({ x: Math.random() * (GAME_WIDTH - 40), y: -40, width: 40, height: 40, speed: (1.5 + Math.random() * 2) * 100, type: type });
-                }
+                spawnObject();
             }
-            for (let i = objects.length - 1; i >= 0; i--) {
-                const obj = objects[i];
+            objectPool.forEach(obj => {
+                if (!obj.active) return;
                 obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
-                if (obj.y > GAME_HEIGHT) { objects.splice(i, 1); continue; }
+                if (obj.y > GAME_HEIGHT) {
+                    obj.active = false;
+                }
                 if (playerHitbox.x < obj.x + obj.width && playerHitbox.x + playerHitbox.width > obj.x && playerHitbox.y < obj.y + obj.height && playerHitbox.y + playerHitbox.height > obj.y) {
                     handleCollision(obj);
-                    objects.splice(i, 1);
+                    obj.active = false;
                 }
-            }
+            });
         }
 
         function handleCollision(obj) {
@@ -229,7 +257,16 @@
         
         // --- 렌더링 ---
         function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
-        function drawObjects() { objects.forEach(obj => { let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
+        function drawObjects() {
+            objectPool.forEach(obj => {
+                if (!obj.active) return;
+                let imgToDraw; 
+                if (obj.type === 'good') imgToDraw = loadedImages.clover; 
+                else if (obj.type === 'special') imgToDraw = loadedImages.love; 
+                else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; 
+                if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height);
+            });
+        }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
         function drawMuteButton() { const muteBtnSize = 60, muteBtnMargin = 20, muteBtnX = muteBtnMargin, muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin; uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize }; let imgToDraw = isMuted ? loadedImages.soundOff : loadedImages.soundOn; if (imgToDraw) ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize); }
@@ -410,9 +447,13 @@
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
             const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
-            ctx.textAlign = 'left'; ctx.fillText(line5_part1, line5StartX, currentY);
-            ctx.fillStyle = '#e67e22'; ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
-            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = 'black'; // 요청하신대로 검은색으로 변경
+            ctx.fillText(line5_part1, line5StartX, currentY);
+            ctx.fillStyle = '#e67e22';
+            ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY);
             currentY += lineHeight;
 
             ctx.textAlign = 'center';
