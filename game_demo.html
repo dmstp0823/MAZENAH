@@ -89,7 +89,7 @@
         let cloverImg = new Image(), loveImg = new Image(), bombImg = new Image(), cloverTitleImg = new Image();
         let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
         let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image(), circleBtnImg = new Image();
-        let soundOnImg = new Image(), soundOffImg = new Image();
+        let soundOnImg = new Image(), soundOffImg = new Image(), groundImg = new Image();
         let hasInteracted = false;
         let isMuted = false;
 
@@ -127,6 +127,7 @@
             promises.push(new Promise((resolve, reject) => { circleBtnImg.src = './circle.png'; circleBtnImg.onload = resolve; circleBtnImg.onerror = () => reject('이미지 로드 실패: circle.png'); }));
             promises.push(new Promise((resolve, reject) => { soundOnImg.src = './sound_on.png'; soundOnImg.onload = resolve; soundOnImg.onerror = () => reject('이미지 로드 실패: sound_on.png'); }));
             promises.push(new Promise((resolve, reject) => { soundOffImg.src = './sound_off.png'; soundOffImg.onload = resolve; soundOffImg.onerror = () => reject('이미지 로드 실패: sound_off.png'); }));
+            promises.push(new Promise((resolve, reject) => { groundImg.src = './ground.png'; groundImg.onload = resolve; groundImg.onerror = () => reject('이미지 로드 실패: ground.png'); }));
             return Promise.all(promises);
         }
 
@@ -176,6 +177,13 @@
             }
         }
 
+        function drawGround() {
+            if (groundImg.complete && groundImg.naturalWidth > 0) {
+                const imgHeight = (groundImg.naturalHeight / groundImg.naturalWidth) * GAME_WIDTH;
+                ctx.drawImage(groundImg, 0, GAME_HEIGHT - imgHeight, GAME_WIDTH, imgHeight);
+            }
+        }
+
         function drawCurrentState() {
             const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
             canvas.style.backgroundColor = bgColor;
@@ -184,7 +192,7 @@
             ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
             if (gameState === 'loading') { ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); }
             else if (gameState === 'startScreen') { drawStartScreen(); }
-            else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawUI(); }
+            else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawGround(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
             else if (gameState === 'gameOver') { drawGameOver(); }
             
@@ -223,13 +231,13 @@
         function drawCreditScreen() {
             ctx.fillStyle = '#2c3e50';
             ctx.textAlign = 'center';
-            let currentY = GAME_HEIGHT * 0.25;
+            let currentY = GAME_HEIGHT * 0.2;
             const titleFontSize = 28;
             const contentFontSize = 20;
             const lineHeight = 35;
-            const sectionGap = 50;
+            const sectionGap = 45;
 
-            // Made by
+            // Game Director
             ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
             ctx.fillText('Game Director', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
@@ -247,12 +255,20 @@
             ctx.fillText('BGM : "Love Love Love (Chiptune ver.)" - 나상현씨밴드', GAME_WIDTH / 2, currentY);
             currentY += sectionGap;
 
-            // Voice
+            // Voice Cast
             ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
             ctx.fillText('Voice Cast', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
             ctx.font = `${contentFontSize}px "MyGameFont"`;
             ctx.fillText('백승렬, 강현웅, 나상현', GAME_WIDTH / 2, currentY);
+            currentY += sectionGap;
+            
+            // Special Thanks
+            ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
+            ctx.fillText('Special Thanks', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.font = `${contentFontSize}px "MyGameFont"`;
+            ctx.fillText('나씨밴, 나씨팬', GAME_WIDTH / 2, currentY);
 
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
@@ -431,7 +447,7 @@
             else if (startScreenState === 'credit') { drawCreditScreen(); } 
         }
         function drawPauseScreen() {
-            drawObjects(); drawPlayer(); drawUI(false);
+            drawObjects(); drawPlayer(); drawGround(); drawUI(false);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
             const btnWidth = 200, btnHeight = 60, gap = 30;
@@ -446,6 +462,9 @@
             ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
         function drawGameOver() { 
+            drawObjects();
+            drawPlayer();
+            drawGround();
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
             ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
             ctx.fillStyle = 'white'; 
