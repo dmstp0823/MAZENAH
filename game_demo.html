@@ -546,7 +546,9 @@
         
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; 
-            gameSpeedMultiplier = 1 + (score * 0.01);
+            // 렉 현상 완화를 위해 최대 게임 속도를 3배로 제한합니다.
+            gameSpeedMultiplier = Math.min(3, 1 + (score * 0.01));
+            
             if (player.hitTimer > 0) { player.hitTimer -= deltaTime; }
             if (isFeverTime) {
                 feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
@@ -564,7 +566,20 @@
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i]; obj.y += obj.speed * gameSpeedMultiplier * (deltaTime / 1000);
                 if (obj.y > GAME_HEIGHT) { objects.splice(i, 1); continue; }
-                if (player.x < obj.x + obj.width && player.x + player.width > obj.x && player.y < obj.y + obj.height && player.y + player.height > obj.y) {
+
+                // 충돌 판정 영역을 캐릭터 머리 부분으로 수정합니다.
+                const headHitbox = {
+                    x: player.x + player.width * 0.2,
+                    y: player.y,
+                    width: player.width * 0.6,
+                    height: player.height * 0.5
+                };
+
+                if (headHitbox.x < obj.x + obj.width &&
+                    headHitbox.x + headHitbox.width > obj.x &&
+                    headHitbox.y < obj.y + obj.height &&
+                    headHitbox.y + headHitbox.height > obj.y) {
+                    
                     if (obj.type === 'bad') {
                         lives--;
                         objects.splice(i, 1);
@@ -596,27 +611,31 @@
         async function handleInteractionStart(e) {
             e.preventDefault(); const pos = getEventPos(e);
             
+            if (!hasInteracted) {
+                hasInteracted = true;
+                // 모바일 브라우저에서 사운드가 재생되도록 오디오 풀을 활성화합니다.
+                Object.values(sfxPool).forEach(soundData => {
+                    const audio = soundData.pool[0];
+                    if (audio) {
+                        audio.play();
+                        audio.pause();
+                    }
+                });
+
+                if (!isMuted) {
+                    bgm.volume = BGM_VOLUME_MENU;
+                    bgm.loop = true;
+                    bgm.play().catch(()=>{});
+                }
+            }
+            
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) {
                 isMuted = !isMuted;
                 bgm.muted = isMuted;
-                if (!hasInteracted) {
-                    hasInteracted = true;
-                    if (!isMuted) {
-                        bgm.volume = BGM_VOLUME_MENU;
-                        bgm.loop = true;
-                        bgm.play().catch(() => {});
-                    }
-                }
                 drawCurrentState();
                 return;
             }
 
-            if (!hasInteracted) {
-                hasInteracted = true;
-                bgm.volume = BGM_VOLUME_MENU;
-                bgm.loop = true;
-                bgm.play().catch(()=>{});
-            }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
                     if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'characterSelect'; }
@@ -701,6 +720,9 @@
         
         Promise.all([loadImages(), loadSounds(), document.fonts.ready]).then(() => {
             gameState = 'startScreen';
+            
+            // BGM 자동 재생 시도를 제거하고, 첫 상호작용 시 재생되도록 로직을 통합합니다.
+
         }).catch(error => {
             console.error(error);
             alert('콘텐츠를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
