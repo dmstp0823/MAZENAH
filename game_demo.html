@@ -30,15 +30,6 @@
     <canvas id="gameCanvas"></canvas>
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
-    <audio id="selectSfx1" src="./sounds/char1-1.mp3"></audio>
-    <audio id="selectSfx2" src="./sounds/char2-1.mp3"></audio>
-    <audio id="selectSfx3" src="./sounds/char3-1.mp3"></audio>
-    <audio id="hitSfx1" src="./sounds/char1-1-1.mp3"></audio>
-    <audio id="hitSfx2" src="./sounds/char2-1-1.mp3"></audio>
-    <audio id="hitSfx3" src="./sounds/char3-1-1.mp3"></audio>
-    <audio id="bombHitSfx" src="./sounds/bomb_hit.mp3"></audio>
-    <audio id="buttonClickSfx" src="./sounds/button_click.mp3"></audio>
-    <audio id="gameOverSfx" src="./sounds/game_over.mp3"></audio>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -69,15 +60,20 @@
         const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2;
 
         let db, leaderboardCollection, cachedLeaderboard = null;
+        
+        // ✨ characters 배열에 누락된 속성 추가
         const characters = [
-            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfx: selectSfx2, hitSfx: hitSfx2 },
-            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfx: selectSfx3, hitSfx: hitSfx3 },
-            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfx: selectSfx1, hitSfx: hitSfx1 }
+            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.7, hitVolume: 1.0 },
+            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
+            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', selectSfxSrc: './sounds/char1-1.mp3', hitSfxSrc: './sounds/char1-1-1.mp3', selectVolume: 0.7, hitVolume: 1.0 }
         ];
+        characters.forEach(char => {
+            char.img = null; char.imgSelected = null; char.imgIcon = null; char.imgHit = null;
+        });
+        
         let selectedCharacterId = 1;
         
-        let uiBoxes = {};
-        let startScreenState = 'main'; 
+        let uiBoxes = {}, startScreenState = 'main'; 
         let leaderboardScrollY = 0, isDragging = false, lastTouchY = 0;
         let player, objects, score, spawnTimer, targetX;
         let gameState = 'loading';
@@ -95,6 +91,10 @@
         let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
         let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image();
         let hasInteracted = false;
+
+        const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
+        const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
+        const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
 
         // --- 함수 정의 ---
         
@@ -121,12 +121,11 @@
             return Promise.all(promises);
         }
 
-        function playSound(soundId) {
-            const sound = document.getElementById(soundId);
-            if (sound) {
-                sound.currentTime = 0;
-                sound.play().catch(e => {});
-            }
+        function playSound(src, volume = 1.0) {
+            if (!src || !hasInteracted) return;
+            const audio = new Audio(src);
+            audio.volume = volume;
+            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
         }
 
         function init() {
@@ -179,7 +178,7 @@
         function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
         
         function drawPlayer() {
-            let currentImg = (player.hitTimer > 0 && player.hitImg) ? player.hitImg : player.originalImg;
+            let currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg;
             if (currentImg) { ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
         }
         
@@ -371,6 +370,7 @@
             if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText(`CLOVER TIME!`, GAME_WIDTH / 2, 120); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, GAME_WIDTH / 2, 160); }
             if (drawButton) { const btnSize = 40, margin = 15; const btnX = GAME_WIDTH - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
         }
+
         function movePlayer() { if (player.dx !== 0) { player.x += player.dx; targetX = player.x; } else { player.x += (targetX - player.x) * 0.5; } if (player.x < 0) player.x = 0; if (player.x + player.width > GAME_WIDTH) player.x = GAME_WIDTH - player.width; }
         
         function updateObjects(deltaTime) {
