@@ -37,7 +37,7 @@
         // Firebase Config
         // ==================================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVhMUqewmXhetq0",
+            apiKey: "AIzaSyA90s1FUPCjbW3Wo_N8IVyMUqewmXhetq0", // 실제 API 키로 교체하세요
             authDomain: "clovergame-e712f.firebaseapp.com",
             projectId: "clovergame-e712f",
             storageBucket: "clovergame-e712f.appspot.com",
@@ -167,35 +167,34 @@
         }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         
-        // ✨ 순위표 그리기 함수 수정 (시작 Y 좌표 조정)
         function drawLeaderboardScreen() {
-            let listStartY = GAME_HEIGHT * 0.15; // 기본 시작 Y 위치
+            let listStartY = GAME_HEIGHT * 0.15; 
             if (majorImg.complete) {
                 const imgWidth = GAME_WIDTH * 0.6;
                 const imgHeight = (majorImg.naturalHeight / majorImg.naturalWidth) * imgWidth;
                 const imgY = GAME_HEIGHT * 0.05;
                 ctx.drawImage(majorImg, (GAME_WIDTH - imgWidth) / 2, imgY, imgWidth, imgHeight);
-                listStartY = imgY + imgHeight + 20; // 이미지 높이 + 여백
+                listStartY = imgY + imgHeight + 20; 
             } else {
                 ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('🏆 Top 10 🏆', GAME_WIDTH / 2, GAME_HEIGHT * 0.1);
             }
             
-            const listHeight = GAME_HEIGHT * 0.7; // 전체 사용 가능한 높이
             const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
             if (cachedLeaderboard === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, listStartY + 50); }
             else if (cachedLeaderboard.length === 0) { ctx.font = '20px "MyGameFont"'; ctx.fillText('아직 기록이 없습니다!', GAME_WIDTH / 2, listStartY + 50); }
             else { 
                 const leaderboardItemsHeight = cachedLeaderboard.length * (boxHeight + gap) - gap;
-                const scrollableAreaHeight = GAME_HEIGHT * 0.9 - listStartY - (GAME_HEIGHT * 0.1); // 버튼 위까지의 스크롤 가능 영역
+                const scrollableAreaHeight = GAME_HEIGHT * 0.9 - listStartY - (GAME_HEIGHT * 0.05); // 버튼과의 간격 고려
                 const maxScroll = 0; 
-                const minScroll = -Math.max(0, leaderboardItemsHeight - scrollableAreaHeight); // 스크롤 범위 계산
+                const minScroll = -Math.max(0, leaderboardItemsHeight - scrollableAreaHeight); 
                 
                 if (leaderboardScrollY > maxScroll) leaderboardScrollY = maxScroll; 
                 if (leaderboardScrollY < minScroll) leaderboardScrollY = minScroll;
 
                 ctx.save(); 
                 ctx.beginPath(); 
-                ctx.rect((GAME_WIDTH - boxWidth) / 2 - 10, listStartY - 10, boxWidth + 20, scrollableAreaHeight + 20); // 클리핑 영역 조정
+                // 클리핑 영역을 순위 목록이 시작하는 지점부터 버튼 위까지로 설정
+                ctx.rect((GAME_WIDTH - boxWidth) / 2 - 10, listStartY - 5, boxWidth + 20, scrollableAreaHeight + 10); 
                 ctx.clip();
 
                 cachedLeaderboard.forEach((entry, index) => {
@@ -245,36 +244,77 @@
         }
 
         function drawMainMenu() {
+            let currentY = GAME_HEIGHT * 0.15; // 제목 이미지 시작 Y
+
+            // 제목 이미지 그리기
             if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
                 const imgWidth = GAME_WIDTH * 0.8; 
                 const imgHeight = (cloverTitleImg.naturalHeight / cloverTitleImg.naturalWidth) * imgWidth;
                 const imgX = (GAME_WIDTH - imgWidth) / 2;
-                const imgY = GAME_HEIGHT * 0.15;
-                ctx.drawImage(cloverTitleImg, imgX, imgY, imgWidth, imgHeight);
+                ctx.drawImage(cloverTitleImg, imgX, currentY, imgWidth, imgHeight);
+                currentY += imgHeight + (GAME_HEIGHT * 0.05); // 이미지 높이만큼 이동 후 여백 추가
             } else {
                 const titleFontSize = Math.min(GAME_WIDTH * 0.1, 48);
-                ctx.fillStyle = '#2c3e50'; ctx.font = `bold ${titleFontSize}px "MyGameFont"`; ctx.textAlign = 'center'; ctx.fillText('물체 피하기 게임', GAME_WIDTH / 2, GAME_HEIGHT * 0.2);
+                ctx.fillStyle = '#2c3e50'; ctx.font = `bold ${titleFontSize}px "MyGameFont"`; ctx.textAlign = 'center'; ctx.fillText('물체 피하기 게임', GAME_WIDTH / 2, currentY + titleFontSize / 2);
+                currentY += titleFontSize + (GAME_HEIGHT * 0.05);
             }
-            const btnWidth = Math.min(GAME_WIDTH * 0.7, 300); const btnHeight = Math.min(GAME_HEIGHT * 0.1, 60); const gap = btnHeight * 0.5;
-            const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2); const btnX = (GAME_WIDTH - btnWidth) / 2;
-            let startY = (GAME_HEIGHT - totalBtnBlockHeight) * 0.6;
-            if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
-                const imgHeight = (cloverTitleImg.naturalHeight / cloverTitleImg.naturalWidth) * (GAME_WIDTH * 0.8);
-                startY = GAME_HEIGHT * 0.15 + imgHeight + gap * 2; 
-            }
+
+            // 게임 설명 그리기
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '18px "MyGameFont"';
+            ctx.textAlign = 'center';
+            const textLineHeight = 25;
+            const iconSize = 20; // 이미지 크기 조절
+
+            currentY += 20; // 설명 시작 전 여백
+
+            ctx.fillText('<게임방법>', GAME_WIDTH / 2, currentY);
+            currentY += textLineHeight + 5;
+
+            ctx.textAlign = 'left';
+            let textX = (GAME_WIDTH - 300) / 2; // 텍스트 시작 X 위치 조정 (중앙 정렬 효과)
+
+            // clover.png 설명
+            ctx.fillText('를 많이 받아 점수를 내는 게임입니다!', textX + iconSize + 5, currentY + iconSize / 2 + 5);
+            if (cloverImg.complete) { ctx.drawImage(cloverImg, textX, currentY, iconSize, iconSize); }
+            currentY += textLineHeight;
+
+            // love.png 설명
+            ctx.fillText('를 10번 받아 FEVER 게이지가 가득 채우면 CLOVER TIME이 발동합니다', textX + iconSize + 5, currentY + iconSize / 2 + 5);
+            if (loveImg.complete) { ctx.drawImage(loveImg, textX, currentY, iconSize, iconSize); }
+            currentY += textLineHeight;
+
+            // bomb.png 설명
+            ctx.fillText('를 세 번 받으면 GAME OVER!', textX + iconSize + 5, currentY + iconSize / 2 + 5);
+            if (bombImg.complete) { ctx.drawImage(bombImg, textX, currentY, iconSize, iconSize); }
+            currentY += textLineHeight;
+
+            ctx.fillText('점수가 TOP 10 안에 든다면 명예의 전당에 이름을 올릴 수 있습니다', textX, currentY);
+            currentY += textLineHeight;
+
+            ctx.fillText('재미있게 즐겨주세요!❤️', textX, currentY);
+            currentY += textLineHeight + (GAME_HEIGHT * 0.05); // 설명 끝난 후 버튼과의 여백
+
+            // 버튼 그리기
+            const btnWidth = Math.min(GAME_WIDTH * 0.7, 300); const btnHeight = Math.min(GAME_HEIGHT * 0.1, 60);
+            const gap = btnHeight * 0.5;
+            const btnX = (GAME_WIDTH - btnWidth) / 2;
             const btnFontSize = Math.min(btnHeight * 0.4, 24); ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
             
-            uiBoxes.charSelectBtn = { x: btnX, y: startY, width: btnWidth, height: btnHeight };
-            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, startY, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('캐릭터 선택', GAME_WIDTH / 2, startY + btnHeight / 2 + (btnFontSize / 3));
+            // 버튼 시작 Y 위치를 현재 Y에 맞춤
+            let buttonStartY = currentY;
+
+            uiBoxes.charSelectBtn = { x: btnX, y: buttonStartY, width: btnWidth, height: btnHeight };
+            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('캐릭터 선택', GAME_WIDTH / 2, buttonStartY + btnHeight / 2 + (btnFontSize / 3));
             
-            uiBoxes.leaderboardBtn = { x: btnX, y: startY + btnHeight + gap, width: btnWidth, height: btnHeight };
-            if (lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, btnX, startY + btnHeight + gap, btnWidth, btnHeight);
-            ctx.fillStyle = 'black'; ctx.fillText('순위 보기', GAME_WIDTH / 2, startY + btnHeight + gap + btnHeight / 2 + (btnFontSize / 3));
+            uiBoxes.leaderboardBtn = { x: btnX, y: buttonStartY + btnHeight + gap, width: btnWidth, height: btnHeight };
+            if (lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, btnX, buttonStartY + btnHeight + gap, btnWidth, btnHeight);
+            ctx.fillStyle = 'black'; ctx.textAlign = 'center'; ctx.fillText('순위 보기', GAME_WIDTH / 2, buttonStartY + btnHeight + gap + btnHeight / 2 + (btnFontSize / 3));
             
-            uiBoxes.startBtn = { x: btnX, y: startY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
-            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, startY + (btnHeight + gap) * 2, btnWidth, btnHeight);
-            ctx.fillStyle = 'white'; ctx.fillText('게임 시작', GAME_WIDTH / 2, startY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
+            uiBoxes.startBtn = { x: btnX, y: buttonStartY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
+            if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 2, btnWidth, btnHeight);
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('게임 시작', GAME_WIDTH / 2, buttonStartY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
         }
         
         function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } }
