@@ -79,6 +79,7 @@
         let leaderboardScrollY = 0, isDragging = false, lastTouchY = 0;
         let player, objects, score, spawnTimer, targetX;
         let gameState = 'loading';
+        let loadingError = null; // 오류 메시지를 저장할 변수
         let lastTime = 0, gameSpeedMultiplier = 1;
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         const FEVER_DURATION = 5000, FEVER_TRIGGER_COUNT = 10;
@@ -110,7 +111,7 @@
 
         // --- 함수 정의 ---
         
-        function initializeFirebase() { try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); alert("Firebase 연결에 실패했습니다. firebaseConfig를 확인해주세요."); } }
+        function initializeFirebase() { try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { const leaderboard = []; snapshot.forEach(doc => { leaderboard.push(doc.data()); }); cachedLeaderboard = leaderboard; }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
         
@@ -143,7 +144,7 @@
                 LOVE_SFX_1_SRC, LOVE_SFX_2_SRC, CLOVER_SFX_SRC,
                 ...characters.flatMap(c => [c.selectSfxSrc, c.hitSfxSrc])
             ];
-            const uniqueSfx = [...new Set(allSfx.filter(Boolean))]; // 중복 및 null/undefined 제거
+            const uniqueSfx = [...new Set(allSfx.filter(Boolean))]; 
 
             let promises = uniqueSfx.map(src => new Promise((resolve, reject) => {
                 sfxPool[src] = { pool: [], currentIndex: 0 };
@@ -155,7 +156,10 @@
                         loadedCount++;
                         if (loadedCount === SFX_POOL_SIZE) resolve();
                     }, { once: true });
-                    audio.addEventListener('error', () => reject(`오디오 로드 실패: ${src}`));
+                    audio.addEventListener('error', (e) => {
+                        console.error(`오디오 로드 실패: ${src}`, e);
+                        reject(`오디오 로드 실패: ${src}`);
+                    });
                     audio.load();
                     sfxPool[src].pool.push(audio);
                 }
@@ -220,6 +224,49 @@
             }
         }
 
+        function drawErrorScreen() {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            ctx.fillStyle = '#ff4d4d';
+            ctx.font = 'bold 28px "MyGameFont"';
+            ctx.textAlign = 'center';
+            ctx.fillText('! 오류 발생 !', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 120);
+            ctx.fillStyle = 'white';
+            ctx.font = '18px "MyGameFont"';
+            ctx.fillText('게임을 불러오는 데 실패했습니다.', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60);
+            
+            if (loadingError) {
+                ctx.fillStyle = '#cccccc';
+                ctx.font = '14px monospace';
+                const errorString = loadingError.toString();
+                 const maxWidth = GAME_WIDTH - 40;
+                let words = errorString.split(' ');
+                let line = '';
+                let y = GAME_HEIGHT / 2;
+                for(let n = 0; n < words.length; n++) {
+                    let testLine = line + words[n] + ' ';
+                    let metrics = ctx.measureText(testLine);
+                    let testWidth = metrics.width;
+                    if (testWidth > maxWidth && n > 0) {
+                        ctx.fillText(line, GAME_WIDTH / 2, y);
+                        line = words[n] + ' ';
+                        y += 20;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                ctx.fillText(line, GAME_WIDTH / 2, y);
+            }
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '16px "MyGameFont"';
+            ctx.fillText('아래 사항을 확인해주세요:', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60);
+            ctx.fillStyle = '#cccccc';
+            ctx.font = '14px "MyGameFont"';
+            ctx.fillText('- 파일 이름의 대소문자가 정확한지 확인', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 90);
+            ctx.fillText('- 모든 이미지/사운드/폰트 파일이 있는지 확인', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 115);
+        }
+
         function drawCurrentState() {
             const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
             canvas.style.backgroundColor = bgColor;
@@ -227,12 +274,13 @@
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
             if (gameState === 'loading') { ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); }
+            else if (gameState === 'error') { drawErrorScreen(); }
             else if (gameState === 'startScreen') { drawStartScreen(); }
             else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawGround(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
             else if (gameState === 'gameOver') { drawGameOver(); }
             
-            if (gameState !== 'loading') {
+            if (gameState !== 'loading' && gameState !== 'error') {
                 drawMuteButton();
             }
         }
@@ -681,7 +729,11 @@
         
         function gameLoop(timestamp) {
             cancelAnimationFrame(animationFrameId);
-            if (gameState === 'loading') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
+            if (gameState === 'loading' || gameState === 'error') {
+                 drawCurrentState();
+                 animationFrameId = requestAnimationFrame(gameLoop);
+                 return;
+            }
             if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
@@ -720,12 +772,10 @@
         
         Promise.all([loadImages(), loadSounds(), document.fonts.ready]).then(() => {
             gameState = 'startScreen';
-            
-            // BGM 자동 재생 시도를 제거하고, 첫 상호작용 시 재생되도록 로직을 통합합니다.
-
         }).catch(error => {
             console.error(error);
-            alert('콘텐츠를 불러오는 데 실패했습니다. 파일 경로를 확인해주세요.');
+            loadingError = error;
+            gameState = 'error';
         });
         
         gameLoop(0);
