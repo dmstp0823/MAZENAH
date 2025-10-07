@@ -30,16 +30,6 @@
     <canvas id="gameCanvas"></canvas>
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
-    <audio id="selectSfx1" src="./sounds/char1-1.mp3"></audio>
-    <audio id="selectSfx2" src="./sounds/char2-1.mp3"></audio>
-    <audio id="selectSfx3" src="./sounds/char3-1.mp3"></audio>
-    <audio id="hitSfx1" src="./sounds/char1-1-1.mp3"></audio>
-    <audio id="hitSfx2" src="./sounds/char2-1-1.mp3"></audio>
-    <audio id="hitSfx3" src="./sounds/char3-1-1.mp3"></audio>
-    <audio id="bombHitSfx" src="./sounds/bomb_hit.mp3"></audio>
-    <audio id="buttonClickSfx" src="./sounds/button_click.mp3"></audio>
-    <audio id="gameOverSfx" src="./sounds/game_over.mp3"></audio>
-
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
@@ -66,13 +56,14 @@
         const GAME_HEIGHT = 960;
         
         const BGM_VOLUME_NORMAL = 0.5;
-        const BGM_VOLUME_MENU = 0.2;
+        const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2;
 
         let db, leaderboardCollection, cachedLeaderboard = null;
+        
         const characters = [
-            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxId: 'selectSfx2', hitSfxId: 'hitSfx2' },
-            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxId: 'selectSfx3', hitSfxId: 'hitSfx3' },
-            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxId: 'selectSfx1', hitSfxId: 'hitSfx1' }
+            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.7, hitVolume: 1.0 },
+            { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
+            { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', img: null, imgSelected: null, imgIcon: null, imgHit: null, selectSfxSrc: './sounds/char1-1.mp3', hitSfxSrc: './sounds/char1-1-1.mp3', selectVolume: 0.7, hitVolume: 1.0 }
         ];
         let selectedCharacterId = 1;
         
@@ -94,6 +85,10 @@
         let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
         let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image();
         let hasInteracted = false;
+
+        const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
+        const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
+        const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
 
         // --- 함수 정의 ---
         
@@ -120,12 +115,11 @@
             return Promise.all(promises);
         }
 
-        function playSound(id) {
-            const sound = document.getElementById(id);
-            if (sound) {
-                sound.currentTime = 0;
-                sound.play().catch(e => console.log("오디오 재생 오류:", e));
-            }
+        function playSound(src, volume = 1.0) {
+            if (!src || !hasInteracted) return;
+            const audio = new Audio(src);
+            audio.volume = volume;
+            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
         }
 
         function init() {
@@ -399,9 +393,9 @@
                         objects.splice(i, 1);
                         player.hitTimer = 500;
                         const selectedChar = characters.find(c => c.id === selectedCharacterId);
-                        if (selectedChar) playSound(selectedChar.hitSfxId);
-                        playSound('bombHitSfx');
-                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound('gameOverSfx'); }
+                        if (selectedChar) playSound(selectedChar.hitSfxSrc, selectedChar.hitVolume);
+                        playSound(BOMB_HIT_SFX_SRC, 1.0);
+                        if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound(GAME_OVER_SFX_SRC); }
                     } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
                     else { score++; objects.splice(i, 1); }
                 }
@@ -412,35 +406,42 @@
             e.preventDefault(); const pos = getEventPos(e);
             if (!hasInteracted) {
                 hasInteracted = true;
-                const allAudio = document.querySelectorAll('audio');
-                allAudio.forEach(audio => { audio.play().catch(() => {}); audio.pause(); audio.currentTime = 0; });
+                const allAudioPromises = [];
+                document.querySelectorAll('audio').forEach(audio => {
+                    allAudioPromises.push(audio.play().catch(e => {}));
+                });
+                await Promise.all(allAudioPromises);
+                document.querySelectorAll('audio').forEach(audio => {
+                    if(audio.id !== 'bgm') audio.pause();
+                    audio.currentTime = 0;
+                });
                 bgm.volume = BGM_VOLUME_MENU;
-                bgm.play();
+                if(bgm.paused) bgm.play();
             }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
-                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound('buttonClickSfx'); startScreenState = 'characterSelect'; }
-                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound('buttonClickSfx'); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) { playSound('buttonClickSfx'); init(); }
+                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'characterSelect'; }
+                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(BUTTON_CLICK_SFX_SRC); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
+                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(BUTTON_CLICK_SFX_SRC); init(); }
                 } else {
                     if (startScreenState === 'characterSelect') { 
                         uiBoxes.characterBoxes.forEach(box => { 
                             if (isInside(pos, box) && selectedCharacterId !== box.id) {
                                 selectedCharacterId = box.id;
                                 const selectedChar = characters.find(c => c.id === selectedCharacterId);
-                                if (selectedChar) playSound(selectedChar.selectSfxId);
+                                if (selectedChar) playSound(selectedChar.selectSfxSrc, selectedChar.selectVolume);
                             }
                         }); 
                     }
-                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound('buttonClickSfx'); startScreenState = 'main'; leaderboardScrollY = 0; }
-                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound('buttonClickSfx'); startScreenState = 'main'; leaderboardScrollY = 0; } }
+                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; }
+                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'main'; leaderboardScrollY = 0; } }
                 }
             } else if (gameState === 'playing') {
-                if (isInside(pos, pauseButtonBox)) { playSound('buttonClickSfx'); gameState = 'paused'; bgm.pause(); }
+                if (isInside(pos, pauseButtonBox)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'paused'; bgm.pause(); }
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
-                if (isInside(pos, uiBoxes.resumeBtn)) { playSound('buttonClickSfx'); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound('buttonClickSfx'); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
+                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
+                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
             } else if (gameState === 'gameOver') {
                 const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
                 if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
