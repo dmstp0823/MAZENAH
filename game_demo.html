@@ -146,23 +146,26 @@
             ];
             const uniqueSfx = [...new Set(allSfx.filter(Boolean))]; 
 
+            // 안정적인 로딩을 위해 각 사운드 파일당 하나의 인스턴스만 먼저 로드합니다.
             let promises = uniqueSfx.map(src => new Promise((resolve, reject) => {
-                sfxPool[src] = { pool: [], currentIndex: 0 };
-                let loadedCount = 0;
-                for (let i = 0; i < SFX_POOL_SIZE; i++) {
-                    const audio = new Audio();
-                    audio.src = src;
-                    audio.addEventListener('canplaythrough', () => {
-                        loadedCount++;
-                        if (loadedCount === SFX_POOL_SIZE) resolve();
-                    }, { once: true });
-                    audio.addEventListener('error', (e) => {
-                        console.error(`오디오 로드 실패: ${src}`, e);
-                        reject(`오디오 로드 실패: ${src}`);
-                    });
-                    audio.load();
-                    sfxPool[src].pool.push(audio);
-                }
+                const firstAudio = new Audio();
+                firstAudio.src = src;
+
+                firstAudio.addEventListener('canplaythrough', () => {
+                    // 로딩이 성공하면, 이 오디오 객체를 복제하여 오디오 풀을 생성합니다.
+                    sfxPool[src] = { pool: [firstAudio], currentIndex: 0 };
+                    for (let i = 1; i < SFX_POOL_SIZE; i++) {
+                        sfxPool[src].pool.push(firstAudio.cloneNode());
+                    }
+                    resolve();
+                }, { once: true });
+
+                firstAudio.addEventListener('error', (e) => {
+                    console.error(`오디오 로드 실패: ${src}`, e);
+                    reject(`오디오 로드 실패: ${src}`);
+                });
+                
+                firstAudio.load();
             }));
             return Promise.all(promises);
         }
