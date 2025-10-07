@@ -145,7 +145,7 @@
             gameState = 'playing';
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            bgm.play();
+            if(!bgm.paused) bgm.play();
         }
         
         function resizeCanvas() {
@@ -159,6 +159,19 @@
             drawCurrentState();
         }
 
+        function drawMuteButton() {
+            const muteBtnSize = 60;
+            const muteBtnMargin = 20;
+            const muteBtnX = muteBtnMargin;
+            const muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin;
+
+            uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize };
+            let imgToDraw = isMuted ? soundOffImg : soundOnImg;
+            if (imgToDraw.complete) {
+                ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize);
+            }
+        }
+
         function drawCurrentState() {
             const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
             canvas.style.backgroundColor = bgColor;
@@ -170,6 +183,10 @@
             else if (gameState === 'playing') { drawObjects(); drawPlayer(); drawUI(); }
             else if (gameState === 'paused') { drawPauseScreen(); }
             else if (gameState === 'gameOver') { drawGameOver(); }
+            
+            if (gameState !== 'loading') {
+                drawMuteButton();
+            }
         }
         
         function getEventPos(e) { 
@@ -214,7 +231,14 @@
                 const imgHeight = (majorImg.naturalHeight / majorImg.naturalWidth) * imgWidth;
                 const imgY = GAME_HEIGHT * 0.05;
                 ctx.drawImage(majorImg, (GAME_WIDTH - imgWidth) / 2, imgY, imgWidth, imgHeight);
-                listStartY = imgY + imgHeight + 20;
+
+                const textY = imgY + imgHeight + 25;
+                ctx.fillStyle = '#888888';
+                ctx.font = '12px "MyGameFont"';
+                ctx.textAlign = 'center';
+                ctx.fillText('*타인에게 상처를 주는 닉네임은 예고 없이 삭제될 수 있습니다.', GAME_WIDTH / 2, textY);
+
+                listStartY = textY + 20;
             }
             const listHeight = GAME_HEIGHT - listStartY - 100;
             const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
@@ -373,18 +397,6 @@
             else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } 
             else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } 
             else if (startScreenState === 'credit') { drawCreditScreen(); } 
-        
-            // Mute 버튼 (좌하단)
-            const muteBtnSize = 60;
-            const muteBtnMargin = 20;
-            const muteBtnX = muteBtnMargin;
-            const muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin;
-
-            uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize };
-            let imgToDraw = isMuted ? soundOffImg : soundOnImg;
-            if (imgToDraw.complete) {
-                ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize);
-            }
         }
         function drawPauseScreen() {
             drawObjects(); drawPlayer(); drawUI(false);
@@ -401,7 +413,18 @@
             ctx.fillStyle = 'white';
             ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
-        function drawGameOver() { ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); ctx.font = '24px "MyGameFont"'; ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save Score', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); }
+        function drawGameOver() { 
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; 
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
+            ctx.fillStyle = 'white'; 
+            ctx.font = 'bold 40px "MyGameFont"'; 
+            ctx.textAlign = 'center'; 
+            ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); 
+            ctx.font = '24px "MyGameFont"'; 
+            ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2); 
+            ctx.font = '20px "MyGameFont"'; 
+            ctx.fillText('Tap to Save Score', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 40); 
+        }
         function drawUI(drawButton = true) {
             ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'left';
             ctx.fillText(`Score: ${score}`, 15, 30);
@@ -462,14 +485,16 @@
         async function handleInteractionStart(e) {
             e.preventDefault(); const pos = getEventPos(e);
             
-            if (gameState === 'startScreen' && isInside(pos, uiBoxes.muteBtn)) {
+            if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) {
                 isMuted = !isMuted;
                 bgm.muted = isMuted;
                 if (!hasInteracted) {
                     hasInteracted = true;
-                    bgm.volume = BGM_VOLUME_MENU;
-                    bgm.loop = true;
-                    bgm.play().catch(() => {});
+                    if (!isMuted) {
+                        bgm.volume = BGM_VOLUME_MENU;
+                        bgm.loop = true;
+                        bgm.play().catch(() => {});
+                    }
                 }
                 drawCurrentState();
                 return;
@@ -505,12 +530,16 @@
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
                 if (isInside(pos, uiBoxes.resumeBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; }
+                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(BUTTON_CLICK_SFX_SRC); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play(); }
             } else if (gameState === 'gameOver') {
                 const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
                 if (nickname && nickname.trim() !== '') { await saveToLeaderboard(score, nickname.trim()); }
-                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
+                gameState = 'startScreen'; 
+                startScreenState = 'main'; 
+                lastTime = 0;
                 bgm.volume = BGM_VOLUME_MENU;
+                bgm.currentTime = 0;
+                bgm.play();
             }
         }
         
