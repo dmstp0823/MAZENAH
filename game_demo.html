@@ -90,7 +90,9 @@
         let cloverImg = new Image(), loveImg = new Image(), bombImg = new Image(), cloverTitleImg = new Image();
         let darkGrayBtnImg = new Image(), lightGrayBtnImg = new Image();
         let majorImg = new Image(), yellowImg = new Image(), grayImg = new Image(), circleBtnImg = new Image();
+        let soundOnImg = new Image(), soundOffImg = new Image();
         let hasInteracted = false;
+        let isMuted = false;
 
         const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
         const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
@@ -119,11 +121,13 @@
             promises.push(new Promise((resolve, reject) => { yellowImg.src = './yellow.png'; yellowImg.onload = resolve; yellowImg.onerror = () => reject('이미지 로드 실패: yellow.png'); }));
             promises.push(new Promise((resolve, reject) => { grayImg.src = './gray.png'; grayImg.onload = resolve; grayImg.onerror = () => reject('이미지 로드 실패: gray.png'); }));
             promises.push(new Promise((resolve, reject) => { circleBtnImg.src = './circle.png'; circleBtnImg.onload = resolve; circleBtnImg.onerror = () => reject('이미지 로드 실패: circle.png'); }));
+            promises.push(new Promise((resolve, reject) => { soundOnImg.src = './sound_on.png'; soundOnImg.onload = resolve; soundOnImg.onerror = () => reject('이미지 로드 실패: sound_on.png'); }));
+            promises.push(new Promise((resolve, reject) => { soundOffImg.src = './sound_off.png'; soundOffImg.onload = resolve; soundOffImg.onerror = () => reject('이미지 로드 실패: sound_off.png'); }));
             return Promise.all(promises);
         }
 
         function playSound(src, volume = 1.0) {
-            if (!src || !hasInteracted) return;
+            if (!src || !hasInteracted || isMuted) return;
             const audio = new Audio(src);
             audio.volume = volume;
             audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
@@ -361,7 +365,27 @@
             ctx.fillText('Credit', creditBtnX + creditBtnSize / 2, creditBtnY + creditBtnSize / 2);
             ctx.textBaseline = 'alphabetic'; // Reset for other text
         }
-        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } else if (startScreenState === 'credit') { drawCreditScreen(); } }
+        function drawStartScreen() { 
+            uiBoxes = {}; 
+            ctx.fillStyle = '#f0f0f0'; 
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
+            if (startScreenState === 'main') { drawMainMenu(); } 
+            else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } 
+            else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } 
+            else if (startScreenState === 'credit') { drawCreditScreen(); } 
+        
+            // Mute 버튼 (좌하단)
+            const muteBtnSize = 60;
+            const muteBtnMargin = 20;
+            const muteBtnX = muteBtnMargin;
+            const muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin;
+
+            uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize };
+            let imgToDraw = isMuted ? soundOffImg : soundOnImg;
+            if (imgToDraw.complete) {
+                ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize);
+            }
+        }
         function drawPauseScreen() {
             drawObjects(); drawPlayer(); drawUI(false);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -437,6 +461,20 @@
 
         async function handleInteractionStart(e) {
             e.preventDefault(); const pos = getEventPos(e);
+            
+            if (gameState === 'startScreen' && isInside(pos, uiBoxes.muteBtn)) {
+                isMuted = !isMuted;
+                bgm.muted = isMuted;
+                if (!hasInteracted) {
+                    hasInteracted = true;
+                    bgm.volume = BGM_VOLUME_MENU;
+                    bgm.loop = true;
+                    bgm.play().catch(() => {});
+                }
+                drawCurrentState();
+                return;
+            }
+
             if (!hasInteracted) {
                 hasInteracted = true;
                 bgm.volume = BGM_VOLUME_MENU;
