@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>YEAH! We Are CLOVERs!</title>
+    <!-- 브라우저 탭에 표시될 파비콘을 추가하여 404 오류를 해결합니다. -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍀</text></svg>">
     <style>
         @font-face {
             font-family: 'MyGameFont';
@@ -629,7 +631,7 @@
         function gameLoop(timestamp) {
             cancelAnimationFrame(animationFrameId);
             if (gameState === 'loading') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
-            if (!lastTime) lastTime = timestamp;씨
+            if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
             if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); }
