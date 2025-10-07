@@ -359,12 +359,71 @@
             currentY += 20;
             ctx.fillText('<게임방법>', GAME_WIDTH / 2, currentY);
             currentY += lineHeight * 1.5;
-            // ... (How-to-play instructions would go here, simplified for brevity in this comment)
+            
+            function drawLineWithIconAndColor(text, icon, y, textColor = '#2c3e50') { 
+                const textWidth = ctx.measureText(text).width; 
+                const totalWidth = iconSize + 5 + textWidth; 
+                const startX = (GAME_WIDTH - totalWidth) / 2; 
+                if (icon) { ctx.drawImage(icon, startX, y - iconSize, iconSize, iconSize); } 
+                ctx.textAlign = 'left'; 
+                ctx.fillStyle = textColor; 
+                ctx.fillText(text, startX + iconSize + 5, y); 
+                ctx.fillStyle = '#2c3e50'; 
+            }
+            
+            ctx.textAlign = 'left';
+            drawLineWithIconAndColor('를 많이 받아 점수를 내는 게임입니다!', loadedImages.clover, currentY);
+            currentY += lineHeight;
+
+            const line2_part1 = '를 10번 받아 '; const line2_part2 = 'LOVE'; const line2_part3 = ' 게이지가 가득 차면';
+            const line2_part1Width = ctx.measureText(line2_part1).width; const line2_part2Width = ctx.measureText(line2_part2).width;
+            const line2TotalWidth = iconSize + 5 + line2_part1Width + line2_part2Width + ctx.measureText(line2_part3).width;
+            const line2StartX = (GAME_WIDTH - line2TotalWidth) / 2;
+            if (loadedImages.love) ctx.drawImage(loadedImages.love, line2StartX, currentY - iconSize, iconSize, iconSize);
+            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line2_part1, line2StartX + iconSize + 5, currentY);
+            ctx.fillStyle = '#ff69b4';
+            ctx.fillText(line2_part2, line2StartX + iconSize + 5 + line2_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line2_part3, line2StartX + iconSize + 5 + line2_part1Width + line2_part2Width, currentY);
+            currentY += lineHeight;
+
+            const text1 = "CLOVER TIME"; const text2 = "이 발동합니다";
+            const text1Width = ctx.measureText(text1).width; const totalTextWidth = text1Width + ctx.measureText(text2).width;
+            let textStartX = (GAME_WIDTH - totalTextWidth) / 2;
+            ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60';
+            ctx.fillText(text1, textStartX, currentY);
+            ctx.fillStyle = '#2c3e50'; ctx.fillText(text2, textStartX + text1Width, currentY);
+            currentY += lineHeight;
+
+            const line4_part1 = '를 세 번 받으면 '; const line4_part2 = 'GAME OVER!';
+            const line4_part1Width = ctx.measureText(line4_part1).width; const line4TotalWidth = iconSize + 5 + line4_part1Width + ctx.measureText(line4_part2).width;
+            const line4StartX = (GAME_WIDTH - line4TotalWidth) / 2;
+            if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
+            ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50';
+            ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
+            ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY);
+            currentY += lineHeight;
+
+            ctx.textAlign = 'center';
+            const line5_part1 = "점수가 TOP 10 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
+            const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
+            const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
+            const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
+            ctx.textAlign = 'left'; ctx.fillText(line5_part1, line5StartX, currentY);
+            ctx.fillStyle = '#e67e22'; ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
+            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY);
+            currentY += lineHeight;
+
+            ctx.textAlign = 'center';
+            ctx.fillText('재미있게 즐겨주세요!❤️', GAME_WIDTH / 2, currentY);
+            currentY += 40;
+
             const btnWidth = Math.min(GAME_WIDTH * 0.7, 300), btnHeight = Math.min(GAME_HEIGHT * 0.08, 60);
             const gap = btnHeight * 0.5, btnX = (GAME_WIDTH - btnWidth) / 2;
             const btnFontSize = Math.min(btnHeight * 0.4, 24);
             ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
-            let buttonStartY = currentY + lineHeight * 7;
+            let buttonStartY = currentY;
             const mainMenuButtons = [
                 { id: 'charSelectBtn', text: '캐릭터 선택', y: buttonStartY, img: loadedImages.darkGrayBtn, color: 'white' },
                 { id: 'leaderboardBtn', text: '명예의 전당', y: buttonStartY + btnHeight + gap, img: loadedImages.lightGrayBtn, color: 'black' },
@@ -374,6 +433,7 @@
                 uiBoxes[btn.id] = { x: btnX, y: btn.y, width: btnWidth, height: btnHeight };
                 if(btn.img) ctx.drawImage(btn.img, btnX, btn.y, btnWidth, btnHeight);
                 ctx.fillStyle = btn.color;
+                ctx.textAlign = 'center';
                 ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3));
             });
             const creditBtnSize = 60, creditBtnMargin = 20;
