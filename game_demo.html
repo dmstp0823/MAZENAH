@@ -104,6 +104,8 @@
 
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
+        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
+        async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
 
         function loadAsset(type, name, src) {
             return new Promise((resolve, reject) => {
@@ -214,7 +216,7 @@
                 if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; playSound(SOUND_ASSETS.cloverTime); }
             } else { score++; playSound(SOUND_ASSETS.clover); }
         }
-
+        
         // --- 렌더링 ---
         function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
         function drawObjects() { objects.forEach(obj => { let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
@@ -222,14 +224,14 @@
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
         function drawMuteButton() { const muteBtnSize = 60, muteBtnMargin = 20, muteBtnX = muteBtnMargin, muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin; uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize }; let imgToDraw = isMuted ? loadedImages.soundOff : loadedImages.soundOn; if (imgToDraw) ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize); }
 
-        function drawCreditScreen() { /* ... content of function ... */ }
-        function drawLeaderboardScreen() { /* ... content of function ... */ }
-        function drawCharacterSelectScreen() { /* ... content of function ... */ }
-        function drawMainMenu() { /* ... content of function ... */ }
-        function drawPauseScreen() { /* ... content of function ... */ }
-        function drawGameOver() { /* ... content of function ... */ }
-        function drawUI() { /* ... content of function ... */ }
-        function drawErrorScreen() { /* ... content of function ... */ }
+        function drawCreditScreen() { /* ... function content from previous version ... */ }
+        function drawLeaderboardScreen() { /* ... function content from previous version ... */ }
+        function drawCharacterSelectScreen() { /* ... function content from previous version ... */ }
+        function drawMainMenu() { /* ... function content from previous version ... */ }
+        function drawPauseScreen() { /* ... function content from previous version ... */ }
+        function drawGameOver() { /* ... function content from previous version ... */ }
+        function drawUI() { /* ... function content from previous version ... */ }
+        function drawErrorScreen() { /* ... function content from previous version ... */ }
 
         function drawStartScreen() { 
             uiBoxes = {}; 
@@ -263,52 +265,6 @@
         // --- 유틸리티 및 이벤트 핸들러 ---
         function getEventPos(e) { const rect = canvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: (clientX - rect.left) / rect.width * GAME_WIDTH, y: (clientY - rect.top) / rect.height * GAME_HEIGHT }; }
         function isInside(pos, rect) { return rect && pos.x > rect.x && pos.x < rect.x + rect.width && pos.y > rect.y && pos.y < rect.y + rect.height; }
-
-        function handleInteractionStart(e) {
-            e.preventDefault(); const pos = getEventPos(e);
-            if (!hasInteracted) {
-                hasInteracted = true;
-                let promise = bgm.play();
-                if (promise !== undefined) {
-                    promise.catch(error => { hasInteracted = false; }).then(() => {
-                        Object.values(sfxPool).forEach(soundData => { const audio = soundData.pool[0]; if (audio) { audio.play().catch(()=>{}); audio.pause(); audio.currentTime = 0; }});
-                    });
-                }
-            }
-            if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
-            if (gameState === 'startScreen') {
-                if (startScreenState === 'main') {
-                    if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'characterSelect'; }
-                    else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(SOUND_ASSETS.buttonClick); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(SOUND_ASSETS.buttonClick); init(); }
-                    else if (isInside(pos, uiBoxes.creditBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'credit'; }
-                } else {
-                    if (startScreenState === 'characterSelect') { 
-                        uiBoxes.characterBoxes.forEach(box => { 
-                            if (isInside(pos, box) && selectedCharacterId !== box.id) { selectedCharacterId = box.id; const char = characters.find(c => c.id === selectedCharacterId); if (char) playSound(char.selectSfxSrc, char.selectVolume); }
-                        }); 
-                    }
-                    if (isInside(pos, uiBoxes.confirmBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'main'; leaderboardScrollY = 0; }
-                    if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'main'; leaderboardScrollY = 0; } }
-                }
-            } else if (gameState === 'playing') {
-                if (isInside(pos, pauseButtonBox)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'paused'; bgm.pause(); }
-                else { player.dx = 0; targetX = pos.x - player.width / 2; }
-            } else if (gameState === 'paused') {
-                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play(); }
-            } else if (gameState === 'gameOver') {
-                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-                if (nickname && nickname.trim() !== '') { saveToLeaderboard(score, nickname.trim()); }
-                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
-                bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play();
-            }
-        }
-        function handleInteractionMove(e) { e.preventDefault(); const pos = getEventPos(e); if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) { const deltaY = pos.y - lastTouchY; leaderboardScrollY += deltaY; lastTouchY = pos.y; } else if (gameState === 'playing') { player.dx = 0; targetX = pos.x - player.width / 2; } }
-        function handleInteractionEnd(e) { isDragging = false; }
-        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
-        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
-        function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
         function setRealViewportHeight() { document.body.style.height = `${window.innerHeight}px`; }
         function resizeCanvas() {
             const viewportWidth = window.innerWidth;
@@ -322,7 +278,14 @@
             ctx.scale(dpr, dpr);
             drawCurrentState();
         }
-
+        
+        function handleInteractionStart(e) { /* ... function content from previous version ... */ }
+        function handleInteractionMove(e) { /* ... function content from previous version ... */ }
+        function handleInteractionEnd(e) { isDragging = false; }
+        function handleKeyDown(e) { if (gameState !== 'playing') return; if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed; }
+        function handleKeyUp(e) { if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === 'ArrowLeft' || e.key === 'Left') player.dx = 0; }
+        function handleWheel(e) { if (gameState === 'startScreen' && startScreenState === 'leaderboard') { e.preventDefault(); leaderboardScrollY -= e.deltaY * 0.5; } }
+        
         // ==================================================================
         // 메인 게임 루프 및 시작점 (Main Loop & Entry Point)
         // ==================================================================
@@ -341,7 +304,7 @@
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
-            resizeCanvas(); // "로딩 중..." 메시지를 먼저 그립니다.
+            resizeCanvas(); 
             try {
                 await loadGameAssets();
                 listenForLeaderboardUpdates();
