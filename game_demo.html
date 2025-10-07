@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>YEAH! We Are CLOVERs!</title>
+    <title>온라인 순위 경쟁! 물체 피하기</title>
     <style>
         @font-face {
             font-family: 'MyGameFont';
             src: url('./fonts/Pak_Yong_jun.ttf') format('truetype');
         }
-        body {
+        html, body {
             margin: 0;
+            padding: 0;
             overflow: hidden;
             background-color: #000;
+            width: 100%;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            font-family: 'MyGameFont', sans-serif;
         }
         canvas {
             display: block;
@@ -166,7 +167,6 @@
         }
         
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
-        
         function drawLeaderboardScreen() {
             ctx.fillStyle = '#34495e'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('🏆 Top 10 🏆', GAME_WIDTH / 2, GAME_HEIGHT * 0.1);
             const listStartY = GAME_HEIGHT * 0.15; const listHeight = GAME_HEIGHT * 0.7; const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
@@ -196,7 +196,6 @@
             }
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
-        
         function drawCharacterSelectScreen() {
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('캐릭터를 선택하세요', GAME_WIDTH / 2, GAME_HEIGHT * 0.15);
             const displayCharSize = Math.min(GAME_WIDTH / 4, 100); const gap = 20;
@@ -221,7 +220,7 @@
             });
             drawConfirmButton(GAME_HEIGHT * 0.8);
         }
-
+        
         function drawMainMenu() {
             if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
                 const imgWidth = GAME_WIDTH * 0.8; 
@@ -233,12 +232,14 @@
                 const titleFontSize = Math.min(GAME_WIDTH * 0.1, 48);
                 ctx.fillStyle = '#2c3e50'; ctx.font = `bold ${titleFontSize}px "MyGameFont"`; ctx.textAlign = 'center'; ctx.fillText('물체 피하기 게임', GAME_WIDTH / 2, GAME_HEIGHT * 0.2);
             }
-            const btnWidth = Math.min(GAME_WIDTH * 0.7, 300); const btnHeight = Math.min(GAME_HEIGHT * 0.1, 60); const gap = btnHeight * 0.5;
-            const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2); const btnX = (GAME_WIDTH - btnWidth) / 2;
-            let startY = (GAME_HEIGHT - totalBtnBlockHeight) * 0.6;
+            const btnWidth = Math.min(GAME_WIDTH * 0.7, 300); const btnHeight = Math.min(GAME_HEIGHT * 0.1, 60);
+            const gap = btnHeight * 0.5;
+            const totalBtnBlockHeight = (btnHeight * 3) + (gap * 2);
+            const btnX = (GAME_WIDTH - btnWidth) / 2;
+            let startY = (GAME_HEIGHT - totalBtnBlockHeight) * 0.65;
             if (cloverTitleImg.complete && cloverTitleImg.naturalWidth > 0) {
                 const imgHeight = (cloverTitleImg.naturalHeight / cloverTitleImg.naturalWidth) * (GAME_WIDTH * 0.8);
-                startY = GAME_HEIGHT * 0.15 + imgHeight + gap; 
+                startY = GAME_HEIGHT * 0.15 + imgHeight + gap * 2; 
             }
             const btnFontSize = Math.min(btnHeight * 0.4, 24); ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
             
@@ -278,19 +279,18 @@
         function drawUI(drawButton = true) {
             ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'left';
             ctx.fillText(`Score: ${score}`, 15, 30);
-            
-            ctx.textAlign = 'left';
-            let hearts = '';
-            for (let i = 0; i < MAX_LIVES; i++) { hearts += (i < lives) ? '❤️' : '🖤'; }
-            ctx.font = '24px Arial';
-            ctx.fillText(hearts, 15, 95);
-
             const gaugeWidth = 150, gaugeHeight = 20, gaugeX = 15, gaugeY = 45;
             ctx.strokeStyle = '#333'; ctx.strokeRect(gaugeX, gaugeY, gaugeWidth, gaugeHeight);
             const fillWidth = (gaugeWidth * feverScore) / FEVER_TRIGGER_COUNT;
             ctx.fillStyle = '#2ecc71'; ctx.fillRect(gaugeX, gaugeY, fillWidth, gaugeHeight);
             ctx.fillStyle = 'black'; ctx.font = '16px "MyGameFont"';
             ctx.fillText('FEVER', gaugeX + gaugeWidth + 10, gaugeY + 16);
+
+            ctx.textAlign = 'left';
+            let hearts = '';
+            for (let i = 0; i < MAX_LIVES; i++) { hearts += (i < lives) ? '❤️' : '🖤'; }
+            ctx.font = '24px Arial';
+            ctx.fillText(hearts, 15, gaugeY + gaugeHeight + 25);
 
             if (isFeverTime) { ctx.fillStyle = 'orange'; ctx.font = 'bold 36px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText(`FEVER TIME!`, GAME_WIDTH / 2, 120); ctx.fillText(`${(feverTimer / 1000).toFixed(1)}s`, GAME_WIDTH / 2, 160); }
             if (drawButton) { const btnSize = 40, margin = 15; const btnX = GAME_WIDTH - btnSize - margin; const btnY = margin; pauseButtonBox = { x: btnX, y: btnY, width: btnSize, height: btnSize }; ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(btnX, btnY, btnSize, btnSize); ctx.fillStyle = 'white'; ctx.fillRect(btnX + 10, btnY + 10, 7, 20); ctx.fillRect(btnX + 23, btnY + 10, 7, 20); }
@@ -301,11 +301,7 @@
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; 
             gameSpeedMultiplier = 1 + (score * 0.01);
-
-            if (player.hitTimer > 0) {
-                player.hitTimer -= deltaTime;
-            }
-
+            if (player.hitTimer > 0) { player.hitTimer -= deltaTime; }
             if (isFeverTime) {
                 feverTimer -= deltaTime; if (feverTimer <= 0) isFeverTime = false;
                 if (spawnTimer > FEVER_SPAWN_INTERVAL / gameSpeedMultiplier) { objects.push({ x: Math.random() * (GAME_WIDTH - 40), y: -40, width: 40, height: 40, speed: 200, type: 'good' }); spawnTimer = 0; }
@@ -327,7 +323,6 @@
                         lives--;
                         objects.splice(i, 1);
                         player.hitTimer = 500;
-                    
                         if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); }
                     } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
                     else { score++; objects.splice(i, 1); }
