@@ -208,7 +208,7 @@
                     inactiveObj.speed = 200;
                     inactiveObj.type = 'good';
                 } else {
-                    const bombChance = Math.min(0.5, 0.3 + (score / 500) * 0.05);
+                    const bombChance = Math.min(0.7, 0.3 + (score / 500) * 0.2);
                     const specialChance = 0.15;
                     const rand = Math.random();
                     if (rand < bombChance) inactiveObj.type = 'bad';
@@ -227,7 +227,7 @@
         
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; 
-            gameSpeedMultiplier = Math.min(3, 1 + (score * 0.01));
+            gameSpeedMultiplier = Math.min(4, 1 + (score * 0.01));
             playerHitbox.x = player.x + player.width * 0.2;
             playerHitbox.y = player.y;
             playerHitbox.width = player.width * 0.6;
