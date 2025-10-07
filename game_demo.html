@@ -9,13 +9,14 @@
             font-family: 'MyGameFont';
             src: url('./fonts/Pak_Yong_jun.ttf') format('truetype');
         }
+        /* 모바일 브라우저 UI로 인한 화면 잘림 현상을 막기 위해 vh 단위를 제거합니다. */
         html, body {
             margin: 0;
             padding: 0;
             overflow: hidden;
             background-color: #000;
             width: 100%;
-            height: 100vh;
+            height: 100%; /* JS에서 높이를 제어합니다. */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -180,9 +181,7 @@
         function drawGround() {
             if (groundImg.complete && groundImg.naturalWidth > 0) {
                 const imgHeight = (groundImg.naturalHeight / groundImg.naturalWidth) * GAME_WIDTH;
-                // 캐릭터를 덜 가리도록 y 좌표를 조정합니다.
-                // 이미지 높이의 일부(60%)만 보이도록 설정합니다.
-                const visiblePortion = 0.6;
+                const visiblePortion = 0.85;
                 ctx.drawImage(groundImg, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight);
             }
         }
@@ -234,18 +233,18 @@
         function drawCreditScreen() {
             ctx.fillStyle = '#2c3e50';
             ctx.textAlign = 'center';
-            let currentY = GAME_HEIGHT * 0.2;
-            const titleFontSize = 28;
-            const contentFontSize = 20;
-            const lineHeight = 35;
-            const sectionGap = 45;
+            let currentY = GAME_HEIGHT * 0.15;
+            const titleFontSize = 24;
+            const contentFontSize = 18;
+            const lineHeight = 30;
+            const sectionGap = 35;
 
-            // Game Director
+            // Made by
             ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
             ctx.fillText('Game Director', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
             ctx.font = `${contentFontSize}px "MyGameFont"`;
-            ctx.fillText('chakoll23', GAME_WIDTH / 2, currentY);
+            ctx.fillText('X_@chakoll23', GAME_WIDTH / 2, currentY);
             currentY += sectionGap;
 
             // Sound
@@ -258,12 +257,22 @@
             ctx.fillText('BGM : "Love Love Love (Chiptune ver.)" - 나상현씨밴드', GAME_WIDTH / 2, currentY);
             currentY += sectionGap;
 
-            // Voice Cast
+            // Voice
             ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
             ctx.fillText('Voice Cast', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
             ctx.font = `${contentFontSize}px "MyGameFont"`;
             ctx.fillText('백승렬, 강현웅, 나상현', GAME_WIDTH / 2, currentY);
+            currentY += sectionGap;
+
+            // Font
+            ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
+            ctx.fillText('Font', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.font = `${contentFontSize}px "MyGameFont"`;
+            ctx.fillText('Main : 박용준투사회보체', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.fillText('Logo : 평창체, 평창 평화체', GAME_WIDTH / 2, currentY);
             currentY += sectionGap;
             
             // Special Thanks
@@ -329,7 +338,7 @@
         }
         function drawCharacterSelectScreen() {
             ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 32px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('캐릭터를 선택하세요', GAME_WIDTH / 2, GAME_HEIGHT * 0.15);
-            const displayCharSize = Math.min(GAME_WIDTH / 4, 100); const gap = 20;
+            const displayCharSize = Math.min(GAME_WIDTH / 3.5, 120); const gap = 20;
             const totalWidth = (displayCharSize * characters.length) + (gap * (characters.length - 1));
             let startX = (GAME_WIDTH - totalWidth) / 2;
             const boxY = (GAME_HEIGHT - displayCharSize) / 2 - 50;
@@ -620,7 +629,7 @@
         function gameLoop(timestamp) {
             cancelAnimationFrame(animationFrameId);
             if (gameState === 'loading') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
-            if (!lastTime) lastTime = timestamp;
+            if (!lastTime) lastTime = timestamp;씨
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
             if (gameState === 'playing') { updateObjects(deltaTime); movePlayer(); }
@@ -629,7 +638,16 @@
         }
 
         // --- 이벤트 리스너 및 게임 시작점 ---
-        window.addEventListener('resize', resizeCanvas);
+
+        // 모바일 브라우저의 실제 뷰포트 높이를 설정하는 함수
+        function setRealViewportHeight() {
+            document.body.style.height = `${window.innerHeight}px`;
+        }
+
+        window.addEventListener('resize', () => {
+            setRealViewportHeight();
+            resizeCanvas();
+        });
         document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
@@ -642,6 +660,7 @@
         canvas.addEventListener('wheel', handleWheel, { passive: false });
 
         initializeFirebase();
+        setRealViewportHeight(); // 페이지 로드 시 실제 높이로 설정
         bgm.volume = BGM_VOLUME_MENU;
         resizeCanvas();
         listenForLeaderboardUpdates();
