@@ -222,10 +222,39 @@
         
         function drawCreditScreen() {
             ctx.fillStyle = '#2c3e50';
-            ctx.font = 'bold 32px "MyGameFont"';
             ctx.textAlign = 'center';
-            ctx.fillText('made by chakoll23', GAME_WIDTH / 2, GAME_HEIGHT / 2);
-            drawConfirmButton(GAME_HEIGHT * 0.8);
+            let currentY = GAME_HEIGHT * 0.25;
+            const titleFontSize = 28;
+            const contentFontSize = 20;
+            const lineHeight = 35;
+            const sectionGap = 50;
+
+            // Game Director
+            ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
+            ctx.fillText('Game Director', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.font = `${contentFontSize}px "MyGameFont"`;
+            ctx.fillText('chakoll23', GAME_WIDTH / 2, currentY);
+            currentY += sectionGap;
+
+            // Sound
+            ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
+            ctx.fillText('Sound', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.font = `${contentFontSize}px "MyGameFont"`;
+            ctx.fillText('SFX : 셀바이뮤직 (Sellbuymusic)', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.fillText('BGM : "Love Love Love (Chiptune ver.)" - 나상현', GAME_WIDTH / 2, currentY);
+            currentY += sectionGap;
+
+            // Voice Cast
+            ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
+            ctx.fillText('Voice Cast', GAME_WIDTH / 2, currentY);
+            currentY += lineHeight;
+            ctx.font = `${contentFontSize}px "MyGameFont"`;
+            ctx.fillText('백승렬, 강현웅, 나상현', GAME_WIDTH / 2, currentY);
+
+            drawConfirmButton(GAME_HEIGHT * 0.9);
         }
 
         function drawLeaderboardScreen() {
