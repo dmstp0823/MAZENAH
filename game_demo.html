@@ -96,6 +96,7 @@
         let hasInteracted = false;
         let isMuted = false;
 
+        // --- 사운드 파일 경로 및 오디오 풀 ---
         const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
         const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
         const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
@@ -104,6 +105,8 @@
         const LOVE_SFX_2_SRC = './sounds/heart.mp3';
         const CLOVER_SFX_SRC = './sounds/Jump Low.mp3';
 
+        let sfxPool = {};
+        const SFX_POOL_SIZE = 5; // 효과음별로 미리 로딩해 둘 오디오 객체 수
 
         // --- 함수 정의 ---
         
@@ -134,11 +137,40 @@
             return Promise.all(promises);
         }
 
+        function loadSounds() {
+            const allSfx = [
+                BOMB_HIT_SFX_SRC, BUTTON_CLICK_SFX_SRC, GAME_OVER_SFX_SRC, CLOVER_TIME_SFX_SRC,
+                LOVE_SFX_1_SRC, LOVE_SFX_2_SRC, CLOVER_SFX_SRC,
+                ...characters.flatMap(c => [c.selectSfxSrc, c.hitSfxSrc])
+            ];
+            const uniqueSfx = [...new Set(allSfx.filter(Boolean))]; // 중복 및 null/undefined 제거
+
+            let promises = uniqueSfx.map(src => new Promise((resolve, reject) => {
+                sfxPool[src] = { pool: [], currentIndex: 0 };
+                let loadedCount = 0;
+                for (let i = 0; i < SFX_POOL_SIZE; i++) {
+                    const audio = new Audio();
+                    audio.src = src;
+                    audio.addEventListener('canplaythrough', () => {
+                        loadedCount++;
+                        if (loadedCount === SFX_POOL_SIZE) resolve();
+                    }, { once: true });
+                    audio.addEventListener('error', () => reject(`오디오 로드 실패: ${src}`));
+                    audio.load();
+                    sfxPool[src].pool.push(audio);
+                }
+            }));
+            return Promise.all(promises);
+        }
+
         function playSound(src, volume = 1.0) {
-            if (!src || !hasInteracted || isMuted) return;
-            const audio = new Audio(src);
+            if (!src || !hasInteracted || isMuted || !sfxPool[src]) return;
+            const soundData = sfxPool[src];
+            const audio = soundData.pool[soundData.currentIndex];
             audio.volume = volume;
+            audio.currentTime = 0;
             audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
+            soundData.currentIndex = (soundData.currentIndex + 1) % SFX_POOL_SIZE;
         }
 
         function init() {
@@ -246,7 +278,7 @@
             ctx.fillText('Made by', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
             ctx.font = `${contentFontSize}px "MyGameFont"`;
-            ctx.fillText('X_@chakoll23', GAME_WIDTH / 2, currentY);
+            ctx.fillText('chakoll23', GAME_WIDTH / 2, currentY);
             currentY += sectionGap;
 
             // Sound
@@ -261,7 +293,7 @@
 
             // Voice
             ctx.font = `bold ${titleFontSize}px "MyGameFont"`;
-            ctx.fillText('Voice Cast', GAME_WIDTH / 2, currentY);
+            ctx.fillText('Voice', GAME_WIDTH / 2, currentY);
             currentY += lineHeight;
             ctx.font = `${contentFontSize}px "MyGameFont"`;
             ctx.fillText('백승렬, 강현웅, 나상현', GAME_WIDTH / 2, currentY);
@@ -667,7 +699,7 @@
         resizeCanvas();
         listenForLeaderboardUpdates();
         
-        Promise.all([loadImages(), document.fonts.ready]).then(() => {
+        Promise.all([loadImages(), loadSounds(), document.fonts.ready]).then(() => {
             gameState = 'startScreen';
         }).catch(error => {
             console.error(error);
