@@ -61,7 +61,6 @@
 
         let db, leaderboardCollection, cachedLeaderboard = null;
         
-        // ✨ characters 배열에 누락된 속성 추가
         const characters = [
             { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.9, hitVolume: 1.0 },
             { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
@@ -97,6 +96,11 @@
         const BOMB_HIT_SFX_SRC = './sounds/bomb_hit.mp3';
         const BUTTON_CLICK_SFX_SRC = './sounds/button_click.mp3';
         const GAME_OVER_SFX_SRC = './sounds/game_over.mp3';
+        const CLOVER_TIME_SFX_SRC = './sounds/clovertime.mp3';
+        const LOVE_SFX_1_SRC = './sounds/bbyong.mp3';
+        const LOVE_SFX_2_SRC = './sounds/heart.mp3';
+        const CLOVER_SFX_SRC = './sounds/Jump Low.mp3';
+
 
         // --- 함수 정의 ---
         
@@ -372,7 +376,6 @@
             if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 2, btnWidth, btnHeight);
             ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('게임 시작', GAME_WIDTH / 2, buttonStartY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
             
-            // Credit 버튼 (우하단 원형)
             const creditBtnSize = 60;
             const creditBtnMargin = 20;
             const creditBtnX = GAME_WIDTH - creditBtnSize - creditBtnMargin;
@@ -387,7 +390,7 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('Credit', creditBtnX + creditBtnSize / 2, creditBtnY + creditBtnSize / 2);
-            ctx.textBaseline = 'alphabetic'; // Reset for other text
+            ctx.textBaseline = 'alphabetic'; 
         }
         function drawStartScreen() { 
             uiBoxes = {}; 
@@ -476,8 +479,22 @@
                         if (selectedChar) playSound(selectedChar.hitSfxSrc, selectedChar.hitVolume);
                         playSound(BOMB_HIT_SFX_SRC, 1.0);
                         if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound(GAME_OVER_SFX_SRC); }
-                    } else if (obj.type === 'special') { feverScore++; objects.splice(i, 1); if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; } }
-                    else { score++; objects.splice(i, 1); }
+                    } else if (obj.type === 'special') {
+                        feverScore++;
+                        objects.splice(i, 1);
+                        const loveSfx = Math.random() < 0.5 ? LOVE_SFX_1_SRC : LOVE_SFX_2_SRC;
+                        playSound(loveSfx);
+                        if (feverScore >= FEVER_TRIGGER_COUNT) {
+                            isFeverTime = true;
+                            feverTimer = FEVER_DURATION;
+                            feverScore = 0;
+                            playSound(CLOVER_TIME_SFX_SRC);
+                        }
+                    } else {
+                        score++;
+                        objects.splice(i, 1);
+                        playSound(CLOVER_SFX_SRC);
+                    }
                 }
             }
         }
