@@ -144,6 +144,16 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
+        function playSound(src, volume = 1.0) {
+            if (!src || !hasInteracted || isMuted || !sfxPool[src]) return;
+            const soundData = sfxPool[src];
+            const audio = soundData.pool[soundData.currentIndex];
+            audio.volume = volume;
+            audio.currentTime = 0;
+            audio.play().catch(e => console.error(`오디오 재생 오류: ${src}`, e));
+            soundData.currentIndex = (soundData.currentIndex + 1) % SFX_POOL_SIZE;
+        }
+
         // --- 게임 로직 ---
         function init() {
             const char = characters.find(c => c.id === selectedCharacterId);
@@ -349,7 +359,7 @@
             currentY += 20;
             ctx.fillText('<게임방법>', GAME_WIDTH / 2, currentY);
             currentY += lineHeight * 1.5;
-            // ... (How-to-play instructions)
+            // ... (How-to-play instructions would go here, simplified for brevity in this comment)
             const btnWidth = Math.min(GAME_WIDTH * 0.7, 300), btnHeight = Math.min(GAME_HEIGHT * 0.08, 60);
             const gap = btnHeight * 0.5, btnX = (GAME_WIDTH - btnWidth) / 2;
             const btnFontSize = Math.min(btnHeight * 0.4, 24);
