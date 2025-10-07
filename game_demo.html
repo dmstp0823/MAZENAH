@@ -193,6 +193,15 @@
         }
         
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50; const btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; if(darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
+        
+        function drawCreditScreen() {
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 32px "MyGameFont"';
+            ctx.textAlign = 'center';
+            ctx.fillText('made by chakoll23', GAME_WIDTH / 2, GAME_HEIGHT / 2);
+            drawConfirmButton(GAME_HEIGHT * 0.8);
+        }
+
         function drawLeaderboardScreen() {
             let listStartY = GAME_HEIGHT * 0.15; 
             if (majorImg.complete && majorImg.naturalWidth > 0) {
@@ -333,8 +342,13 @@
             uiBoxes.startBtn = { x: btnX, y: buttonStartY + (btnHeight + gap) * 2, width: btnWidth, height: btnHeight };
             if (darkGrayBtnImg.complete) ctx.drawImage(darkGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 2, btnWidth, btnHeight);
             ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText('게임 시작', GAME_WIDTH / 2, buttonStartY + (btnHeight + gap) * 2 + btnHeight / 2 + (btnFontSize / 3));
+            
+            // Credit 버튼 추가
+            uiBoxes.creditBtn = { x: btnX, y: buttonStartY + (btnHeight + gap) * 3, width: btnWidth, height: btnHeight };
+            if (lightGrayBtnImg.complete) ctx.drawImage(lightGrayBtnImg, btnX, buttonStartY + (btnHeight + gap) * 3, btnWidth, btnHeight);
+            ctx.fillStyle = 'black'; ctx.textAlign = 'center'; ctx.fillText('Credit', GAME_WIDTH / 2, buttonStartY + (btnHeight + gap) * 3 + btnHeight / 2 + (btnFontSize / 3));
         }
-        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } }
+        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') { drawMainMenu(); } else if (startScreenState === 'leaderboard') { drawLeaderboardScreen(); } else if (startScreenState === 'characterSelect') { drawCharacterSelectScreen(); } else if (startScreenState === 'credit') { drawCreditScreen(); } }
         function drawPauseScreen() {
             drawObjects(); drawPlayer(); drawUI(false);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -421,6 +435,7 @@
                     if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'characterSelect'; }
                     else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(BUTTON_CLICK_SFX_SRC); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
                     else if (isInside(pos, uiBoxes.startBtn)) { playSound(BUTTON_CLICK_SFX_SRC); init(); }
+                    else if (isInside(pos, uiBoxes.creditBtn)) { playSound(BUTTON_CLICK_SFX_SRC); startScreenState = 'credit'; }
                 } else {
                     if (startScreenState === 'characterSelect') { 
                         uiBoxes.characterBoxes.forEach(box => { 
