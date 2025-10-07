@@ -412,7 +412,7 @@
             let textStartX = (GAME_WIDTH - totalTextWidth) / 2;
             ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60'; ctx.fillText(text1, textStartX, currentY);
             ctx.fillStyle = '#2c3e50'; ctx.fillText(text2, textStartX + text1Width, currentY); currentY += lineHeight;
-            const line4_part1 = '를 세 번 받으면 '; const line4_part2 = 'GAME OVER!';
+            const line4_part1 = '를 세 번 맞으면 '; const line4_part2 = 'GAME OVER!';
             const line4_part1Width = ctx.measureText(line4_part1).width; const line4TotalWidth = iconSize + 5 + line4_part1Width + ctx.measureText(line4_part2).width;
             const line4StartX = (GAME_WIDTH - line4TotalWidth) / 2;
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
@@ -422,9 +422,9 @@
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
             const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
-            ctx.textAlign = 'left'; ctx.fillStyle = 'black'; ctx.fillText(line5_part1, line5StartX, currentY);
+            ctx.textAlign = 'left'; ctx.fillStyle = 'black'; ctx.fillText(line5StartX, currentY);
             ctx.fillStyle = '#e67e22'; ctx.fillText(line5_part2, line5StartX + line5_part1Width, currentY);
-            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY); currentY += lineHeight;
+            ctx.fillStyle = '#2c3e50'; ctx.fillText(line5_part1, line5_part3, line5StartX + line5_part1Width + line5_part2Width, currentY); currentY += lineHeight;
             ctx.textAlign = 'center'; ctx.fillText('재미있게 즐겨주세요!❤️', GAME_WIDTH / 2, currentY); currentY += 40;
             const btnWidth = Math.min(GAME_WIDTH * 0.7, 300), btnHeight = Math.min(GAME_HEIGHT * 0.08, 60);
             const gap = btnHeight * 0.5, btnX = (GAME_WIDTH - btnWidth) / 2;
