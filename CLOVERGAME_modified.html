@@ -71,7 +71,9 @@
 
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
-            darkGrayBtn: './darkGray.png', lightGrayBtn: './lightGray.png', major: './major.png',
+            darkGrayBtn: './darkgray.png', // [수정] 경로 대소문자 통일 (d, g 소문자)
+            lightGrayBtn: './lightgray.png', // [수정] 경로 대소문자 통일 (l, g 소문자)
+            major: './major.png',
             yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
             soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
         };
@@ -96,7 +98,8 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
-        let hasInteracted = false, isMuted = false;
+        let hasInteracted = false; // 오디오 활성화 플래그
+        let isMuted = false; // 음소거 상태
         let finalRank = null; 
         
         const loadedImages = {};
@@ -117,7 +120,7 @@
         // [기능 유지] 비동기 순위 저장
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
-        // [수정] loadAsset: HTML Audio는 fetch/decode 과정 없이 바로 HTML 요소로 만듭니다.
+        // [오디오 복구 기반] loadAsset: HTML Audio 요소로 만듭니다.
         async function loadAsset(type, name, src) {
             if (type === 'image') {
                 return new Promise((resolve, reject) => {
@@ -156,12 +159,12 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
-        // **[SFX Fix 1/2]** 모든 SFX 파일을 음소거 상태로 한 번 재생하여 브라우저에 승인받도록 합니다.
+        // [SFX Fix] 모든 SFX 파일을 음소거 상태로 한 번 재생하여 브라우저에 승인받도록 합니다.
         function unlockAllSfx() {
             for (const src in sfxPool) {
                 if (sfxPool.hasOwnProperty(src)) {
                     const audio = sfxPool[src].cloneNode(true);
-                    audio.muted = true; // 소리 없이 재생
+                    audio.muted = true; 
                     audio.volume = 0;
                     audio.play().catch(e => console.log(`SFX unlock attempt failed for ${src}`, e));
                     // 재생 직후 일시 정지 (메모리 및 리소스 절약을 위해 좋습니다.)
@@ -171,9 +174,9 @@
             }
         }
 
-        // [수정] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
+        // [오디오 복구 기반] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
         function playSound(src, volume = 1.0) {
-            if (isMuted || !sfxPool[src] || !hasInteracted) return; // hasInteracted 체크를 유지합니다.
+            if (isMuted || !sfxPool[src] || !hasInteracted) return; 
 
             // 쿨다운 로직은 유지
             if (src === SOUND_ASSETS.clover) {
@@ -188,10 +191,9 @@
                 const originalAudio = sfxPool[src];
                 const clone = originalAudio.cloneNode(true);
                 clone.volume = volume;
-
                 clone.onended = () => clone.remove();
 
-                // **[SFX Fix 2/2]** 충돌 효과음을 재생하기 위해 복잡한 트릭 대신, 승인된 상태를 믿고 바로 재생 시도
+                // 충돌 효과음(비사용자 입력)이 재생되도록 바로 시도합니다.
                 clone.play().catch(e => console.warn(`SFX playback (${src}) failed on HTML Audio:`, e));
             } catch (e) {
                 console.error("SFX playback failed:", e);
@@ -214,7 +216,9 @@
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            if (!bgm.paused) bgm.play().catch(e => console.log("BGM play failed after init:", e));
+            if (!isMuted) { 
+                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
+            }
         }
 
         function spawnObject() {
@@ -299,9 +303,9 @@
                 const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
                 
                 if (isVisible) {
-                    imgToDraw = player.imgHit || player.originalImg; 
+                    imgToDraw = player.imgHit || player.originalImg; // 충돌 이미지 또는 원본 이미지 사용
                 } else {
-                    imgToDraw = null; 
+                    imgToDraw = null; // 안 보이는 프레임
                 }
             }
             
@@ -351,7 +355,7 @@
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
 
-        // [수정] drawLeaderboardScreen: 순위별 이미지 로직 변경
+        // [수정] drawLeaderboardScreen: 순위별 이미지 로직 변경 (4~10위 silver, 11위~ gray)
         function drawLeaderboardScreen() {
             let listStartY = GAME_HEIGHT * 0.15; 
             const majorImg = loadedImages.major;
@@ -386,8 +390,8 @@
                     
                     if (rank <= 3) {
                         boxImg = loadedImages.yellow; // 1~3위: Yellow
-                    } else if (rank <= 10) {
-                        boxImg = loadedImages.silver; // 4~10위: Silver
+                    } else if (rank <= 10) { // [수정] 10위까지 Silver
+                        boxImg = loadedImages.silver; 
                     } else {
                         boxImg = loadedImages.gray; // 11위~: Gray
                     }
@@ -425,11 +429,9 @@
                 const currentY = boxY - (currentSize - displayCharSize) / 2;
                 let imgToDraw = isSelected ? char.imgSelected : char.img;
                 if (imgToDraw) {
-                    const aspectRatio = char.originalWidth / char.originalHeight;
+                    const aspectRatio = char.originalHeight / char.originalWidth;
                     let imgDrawWidth = currentSize;
-                    let imgDrawHeight = currentSize;
-                    if (aspectRatio > 1) imgDrawHeight = currentSize / aspectRatio;
-                    else imgDrawWidth = currentSize * aspectRatio;
+                    let imgDrawHeight = currentSize * aspectRatio;
                     const imgDrawX = currentX + (currentSize - imgDrawWidth) / 2;
                     const imgDrawY = currentY + (currentSize - imgDrawHeight) / 2;
                     ctx.drawImage(imgToDraw, imgDrawX, imgDrawY, imgDrawWidth, imgDrawHeight);
@@ -623,7 +625,7 @@
                     });
                 }
                 
-                // **[SFX Fix 1/2]** 모든 SFX를 음소거 상태로 재생 시도하여 브라우저 승인을 얻습니다.
+                // [SFX Fix] 모든 SFX를 음소거 상태로 재생 시도하여 브라우저 승인을 얻습니다.
                 unlockAllSfx();
             }
             
@@ -700,6 +702,8 @@
         }
 
         async function main() {
+            // Web Audio API 관련 코드 삭제됨. HTML Audio는 Context 초기화가 필요 없습니다.
+
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
