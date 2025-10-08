@@ -32,6 +32,9 @@
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
 
+    <!-- [추가] 모든 효과음을 위한 HTML Audio 요소 -->
+    <div id="sfx-container" style="display: none;"></div>
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
@@ -57,7 +60,7 @@
             projectId: "clovergame-e712f",
             storageBucket: "clovergame-e712f.appspot.com",
             messagingSenderId: "525191060039",
-            appId: "1:5251910600039:web:5707417e6e8ee8bf9cef62"
+            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
         };
         
         const characters = [
@@ -69,12 +72,9 @@
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
             darkGrayBtn: './darkgray.png', lightGrayBtn: './lightgray.png', major: './major.png',
-            yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
-            soundOn: './sound_on.png', 
-            soundOff: './sound_off.png', 
-            ground: './ground.png'
+            yellow: './yellow.png', gray: './gray.png', circleBtn: './circle.png',
+            soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
         };
-        
         const SOUND_ASSETS = {
             bombHit: './sounds/bomb_hit.mp3', buttonClick: './sounds/button_click.mp3',
             gameOver: './sounds/game_over.mp3', cloverTime: './sounds/clovertime.mp3',
@@ -96,17 +96,15 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
-        let finalRank = null;
+        let hasInteracted = false, isMuted = false;
+        let finalRank = null; // 순위 저장 기능 추가를 위한 변수
         
         const loadedImages = {};
-        
-        // [오디오 복구 기반] Web Audio API 변수 선언 및 플래그
-        let sfxPool = {}; 
+        // [수정] Web Audio API 관련 변수 제거 및 HTML Audio 관련 변수만 남김
+        let sfxPool = {}; // HTML Audio 객체를 저장합니다. (Web Audio Buffer 대신)
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
-        let audioContext; 
-        let hasInteracted = false; 
-        let isMuted = false; 
+        // let audioContext; // Web Audio Context 제거
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -118,34 +116,30 @@
         // [기능 유지] 순위표 30위까지 로딩
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(30).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         
+        // [기능 유지] 비동기 순위 저장
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
-        // [오디오 복구 기반] loadAsset 함수에 Sound 로직 복구
+        // [수정] loadAsset: HTML Audio는 fetch/decode 과정 없이 바로 HTML 요소로 만듭니다.
         async function loadAsset(type, name, src) {
             if (type === 'image') {
                 return new Promise((resolve, reject) => {
                     const img = new Image();
                     img.src = src;
                     img.onload = () => {
-                        if (name === 'character' || name === 'soundOn' || name === 'soundOff') resolve(img);
-                        else { loadedImages[name] = img; resolve(); }
+                        loadedImages[name] = img; 
+                        if (name === 'character') resolve(img);
+                        else { resolve(); }
                     };
                     img.onerror = () => reject(`${type} 로드 실패: ${src}`);
                 });
             } else if (type === 'sound') {
-                if (!audioContext) return Promise.resolve();
-                return new Promise(async (resolve, reject) => {
-                    try {
-                        const response = await fetch(src);
-                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                        const arrayBuffer = await response.arrayBuffer();
-                        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                        sfxPool[src] = audioBuffer;
-                        resolve();
-                    } catch (e) {
-                        reject(`${type} 로드 실패: ${src}, 오류: ${e}`);
-                    }
-                });
+                // HTML Audio 요소 생성
+                const audio = document.createElement('audio');
+                audio.src = src;
+                audio.volume = 1.0; 
+                document.getElementById('sfx-container').appendChild(audio);
+                sfxPool[src] = audio;
+                return Promise.resolve();
             }
             return Promise.resolve();
         }
@@ -160,51 +154,34 @@
             ]);
             const soundSrcs = [...new Set([...Object.values(SOUND_ASSETS), ...characters.flatMap(c => [c.selectSfxSrc, c.hitSfxSrc])].filter(Boolean))];
             const soundPromises = soundSrcs.map(src => loadAsset('sound', null, src));
-
+            
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
-        
-        // [오디오 복구 기반] Web Audio Context 활성화 유틸리티 (논블로킹)
-        function unlockAudioContext() {
-            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                return audioContext.resume().then(() => true).catch(e => {
-                    console.error("AudioContext resume failed:", e);
-                    return false;
-                });
-            }
-            return Promise.resolve(true); 
-        }
 
-        // [오디오 복구 기반] playSound 함수 복구
+        // [수정] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
         function playSound(src, volume = 1.0) {
-            // Context가 잠겨있다면 재생 전 resume 시도 (논블로킹)
-            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                unlockAudioContext(); 
-            }
+            // [Web Audio API 관련 로직 제거: audioContext, hasInteracted 검사 제거]
+            if (isMuted || !sfxPool[src]) return;
 
-            if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
-            
-            if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
-            sfxPlayedThisFrame++;
-
-            const now = performance.now();
-            const cooldown = 75;
+            // 쿨다운 로직은 유지
             if (src === SOUND_ASSETS.clover) {
+                const now = performance.now();
+                const cooldown = 75;
                 if (sfxLastPlayed[src] && now - sfxLastPlayed[src] < cooldown) { return; }
+                sfxLastPlayed[src] = now;
             }
-            sfxLastPlayed[src] = now;
 
             try {
-                const source = audioContext.createBufferSource();
-                source.buffer = sfxPool[src];
+                // HTML Audio 요소를 복제하여 동시 재생이 가능하게 합니다.
+                const originalAudio = sfxPool[src];
+                const clone = originalAudio.cloneNode(true);
+                clone.volume = volume;
 
-                const gainNode = audioContext.createGain();
-                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                // 재생이 완료되면 복제된 요소를 DOM에서 제거 (선택적, 메모리 관리)
+                clone.onended = () => clone.remove();
 
-                source.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                source.start(0);
+                // 모바일 환경에서 재생이 거부될 수 있으므로 Promise를 무시합니다.
+                clone.play().catch(e => console.warn("SFX playback failed on HTML Audio:", e));
             } catch (e) {
                 console.error("SFX playback failed:", e);
             }
@@ -216,19 +193,8 @@
             const playerWidth = GAME_WIDTH * 0.2;
             const aspectRatio = char.originalHeight / char.originalWidth;
             const playerHeight = playerWidth * aspectRatio;
-            player = { 
-                width: playerWidth, 
-                height: playerHeight, 
-                x: GAME_WIDTH / 2 - playerWidth / 2, 
-                y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), 
-                speed: char.speed, 
-                img: char.img, 
-                originalImg: char.img, 
-                imgHit: char.imgHit, // 충돌 시 사용할 이미지
-                hitTimer: 0, 
-                dx: 0 
-            };
-
+            // [기능 유지] 피격 이미지 변수 추가
+            player = { width: playerWidth, height: playerHeight, x: GAME_WIDTH / 2 - playerWidth / 2, y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), speed: char.speed, img: char.img, originalImg: char.img, imgHit: char.imgHit, hitTimer: 0, dx: 0 };
             targetX = player.x; score = 0; spawnTimer = 0;
             gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
             lives = MAX_LIVES; gameState = 'playing';
@@ -237,11 +203,7 @@
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            
-            // BGM 재생 (재시도 플래그는 handleInteractionStart에서 관리)
-            if (!isMuted) { 
-                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
-            }
+            if (!bgm.paused) bgm.play().catch(e => console.log("BGM play failed after init:", e));
         }
 
         function spawnObject() {
@@ -304,14 +266,14 @@
         function handleCollision(obj) {
             if (obj.type === 'bad') {
                 lives--;
-                player.hitTimer = 500; // 0.5초 동안 충돌 이미지 표시
+                player.hitTimer = 500;
                 const char = characters.find(c => c.id === selectedCharacterId);
                 if (char) playSound(char.hitSfxSrc, char.hitVolume);
                 playSound(SOUND_ASSETS.bombHit, 1.0);
                 if (lives <= 0) { gameState = 'gameOver'; bgm.pause(); playSound(SOUND_ASSETS.gameOver); }
             } else if (obj.type === 'special') {
                 feverScore++;
-                playSound(SOUND_ASSETS.love1); 
+                playSound(Math.random() < 0.5 ? SOUND_ASSETS.love1 : SOUND_ASSETS.love2);
                 if (feverScore >= FEVER_TRIGGER_COUNT) { isFeverTime = true; feverTimer = FEVER_DURATION; feverScore = 0; playSound(SOUND_ASSETS.cloverTime); }
             } else { score++; playSound(SOUND_ASSETS.clover); }
         }
@@ -324,8 +286,6 @@
             if (player.hitTimer > 0) {
                 const flashRate = 100; // 100ms
                 const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
-
-                ctx.save();
                 
                 if (isVisible) {
                     imgToDraw = player.imgHit || player.originalImg; 
@@ -337,12 +297,8 @@
             if (imgToDraw) {
                 ctx.drawImage(imgToDraw, player.x, player.y, player.width, player.height);
             }
-
-            if (player.hitTimer > 0) {
-                ctx.restore();
-            }
         }
-        
+
         function drawObjects() { objectPool.forEach(obj => { if (!obj.active) return; let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
@@ -502,7 +458,7 @@
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
-            const line5_part1 = "점수가 TOP 30 안에 든다면 "; 
+            const line5_part1 = "점수가 TOP 30 안에 든다면 "; // 30위까지 표시하도록 텍스트 수정
             const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
@@ -541,16 +497,15 @@
             ctx.fillStyle = 'white'; ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
 
+        // [기능 유지] Game Over 비동기 랭킹 처리 로직
         function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
             ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; 
             ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80); 
-            // [구문 오류 수정] 템플릿 리터럴 대신 문자열 연결 사용
             ctx.font = '24px "MyGameFont"'; ctx.fillText('Final Score: ' + score, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40); 
             if (finalRank === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Save & See Rank', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20); }
             else if (finalRank === 'saving') { ctx.font = '20px "MyGameFont"'; ctx.fillText('순위 기록 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20); }
             else { 
-                // [구문 오류 수정] 템플릿 리터럴 대신 문자열 연결 사용
                 ctx.font = 'bold 28px "MyGameFont"'; ctx.fillText('당신의 순위: ' + finalRank + '위', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20); 
                 ctx.font = '20px "MyGameFont"'; ctx.fillText('Tap to Continue', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60); 
             }
@@ -606,10 +561,10 @@
             switch(gameState) {
                 case 'loading': ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); break;
                 case 'error': drawErrorScreen(); break;
-                case 'startScreen': drawStartScreen(); drawMuteButton(); break; 
-                case 'playing': drawObjects(); drawPlayer(); drawGround(); drawUI(); drawMuteButton(); break; 
-                case 'paused': drawObjects(); drawPlayer(); drawGround(); drawUI(false); drawPauseScreen(); drawMuteButton(); break; 
-                case 'gameOver': drawObjects(); drawPlayer(); drawGround(); drawGameOver(); drawMuteButton(); break; 
+                case 'startScreen': drawStartScreen(); drawMuteButton(); break;
+                case 'playing': drawObjects(); drawPlayer(); drawGround(); drawUI(); drawMuteButton(); break;
+                case 'paused': drawObjects(); drawPlayer(); drawGround(); drawUI(false); drawPauseScreen(); drawMuteButton(); break;
+                case 'gameOver': drawObjects(); drawPlayer(); drawGround(); drawGameOver(); drawMuteButton(); break;
             }
         }
         
@@ -632,28 +587,21 @@
             }
         }
 
-        // [오디오 보강] Web Audio Context 활성화 유틸리티
-        function unlockAudioContext() {
-            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
-                return audioContext.resume().then(() => true).catch(e => {
-                    console.error("AudioContext resume failed:", e);
-                    return false;
-                });
-            }
-            return Promise.resolve(true); // Promise를 반환하도록 수정
-        }
-
         // [이벤트 처리] 오디오 활성화 로직 복구 (가장 안정적인 패턴)
-        function handleInteractionStart(e) {
+        async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
             if (!hasInteracted) {
-                // [오디오 활성화] Context 활성화 (논블로킹 시도)
-                unlockAudioContext(); 
+                hasInteracted = true;
                 
-                // BGM play 시도 (HTML Audio)
+                // 1. Context resume 시도
+                if (audioContext && audioContext.state === 'suspended') {
+                    // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
+                    audioContext.resume().catch(e => console.error("Context resume failed:", e));
+                }
+                
+                // 2. BGM play 시도 (HTML Audio)
                 const playPromise = bgm.play();
                 
                 if (playPromise !== undefined) {
@@ -661,9 +609,6 @@
                         // BGM 재생 실패 시 (정책 차단), hasInteracted를 리셋하여 다음 탭에 재시도하도록 게이트를 엽니다.
                         hasInteracted = false; 
                     });
-                } else {
-                    // Promise가 없으면 (일반적인 동기적 재생) hasInteracted 플래그를 true로 설정합니다.
-                    hasInteracted = true;
                 }
             }
             
@@ -678,11 +623,6 @@
                 }
                 drawCurrentState(); 
                 return; 
-            }
-
-            // Context가 잠겨있을 경우, UI 로직 실행 직전에 Context를 깨우는 시도를 다시 합니다.
-            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                unlockAudioContext().catch(e => console.error("Context resume failed on button click:", e));
             }
 
 
@@ -746,22 +686,18 @@
 
         async function main() {
             try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // [Web Audio API 제거]
+                // audioContext = new (window.AudioContext || window.webkitAudioContext)();
             } catch (e) {
-                console.error("Web Audio API is not supported in this browser");
-                loadingError = "Web Audio API is not supported";
-                gameState = 'error';
-                gameLoop(0); // 에러 발생 시 즉시 화면 갱신
-                return;
+                // [Web Audio API 제거]
             }
-            
+
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
             resizeCanvas(); 
             try {
-                // [복구] soundOn/Off 이미지 로딩을 위해 loadGameAssets가 완료될 때까지 대기
-                await loadGameAssets(); 
+                await loadGameAssets();
                 listenForLeaderboardUpdates();
                 gameState = 'startScreen';
             } catch (error) {
@@ -769,22 +705,16 @@
                 loadingError = error;
                 gameState = 'error';
             }
-            gameLoop(0); // 로드 완료 후 화면 갱신
+            gameLoop(0);
         }
         
         window.addEventListener('resize', () => { setRealViewportHeight(); resizeCanvas(); });
         document.addEventListener('visibilitychange', () => { 
-            if (document.hidden) { 
-                if (gameState === 'playing' || gameState === 'paused') bgm.pause();
-            } else {
-                if (gameState === 'playing' || gameState === 'paused') { // 일시정지 상태에서도 BGM 재시도
-                    if (!isMuted) {
-                        bgm.play().catch(e => console.log("BGM play failed on visibility change:", e));
-                    }
-                    if (audioContext && audioContext.state === 'suspended') {
-                         unlockAudioContext().catch(e => console.error("Context resume failed on visibility change:", e));
-                    }
-                }
+            if (document.hidden && gameState === 'playing') { 
+                gameState = 'paused'; bgm.pause(); 
+            } else if (!document.hidden && (gameState === 'playing' || gameState === 'paused') && !isMuted) {
+                // [HTML Audio] 화면 복귀 시 BGM 재생 재시도
+                bgm.play().catch(e => console.log("BGM play failed on visibility change:", e));
             }
         });
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
