@@ -112,7 +112,7 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
-        let hasInteracted = false; // 오디오 활성화 플래그
+        let hasInteracted = false; // 오디오 활성화 플래그 (최초 터치 여부)
         let isMuted = false; // 음소거 상태
         let finalRank = null; 
         
@@ -129,6 +129,12 @@
         const MAX_NICKNAME_LENGTH = 10;
         let isInputFocused = false;
         let preliminaryRank = null; // [추가] 점수 등록 전 임시 순위
+        
+        // [요청 5] 게임 플레이 경험 유무
+        let hasPlayedOnce = false; 
+        
+        // [요청 4] 깜빡임 타이머
+        let blinkTimer = 0;
 
 
         // ==================================================================
@@ -532,6 +538,9 @@
         }
         
         function drawMainMenu() {
+            uiBoxes = {}; // uiBoxes 초기화
+            ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
             let currentY = GAME_HEIGHT * 0.1;
             const titleImg = loadedImages.title;
             if (titleImg) {
@@ -580,8 +589,31 @@
             const btnFontSize = Math.min(btnHeight * 0.4, 24);
             ctx.font = `bold ${btnFontSize}px "MyGameFont"`;
             let buttonStartY = currentY;
-            const mainMenuButtons = [ { id: 'charSelectBtn', text: '캐릭터 선택', y: buttonStartY, img: loadedImages.darkGrayBtn, color: 'white' }, { id: 'leaderboardBtn', text: '명예의 전당', y: buttonStartY + btnHeight + gap, img: loadedImages.lightGrayBtn, color: 'black' }, { id: 'startBtn', text: '게임 시작', y: buttonStartY + (btnHeight + gap) * 2, img: loadedImages.darkGrayBtn, color: 'white' } ];
-            mainMenuButtons.forEach(btn => { uiBoxes[btn.id] = { x: btnX, y: btn.y, width: btnWidth, height: btnHeight }; if(btn.img) ctx.drawImage(btn.img, btnX, btn.y, btnWidth, btnHeight); ctx.fillStyle = btn.color; ctx.textAlign = 'center'; ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); });
+            
+            const mainMenuButtons = [ 
+                { id: 'charSelectBtn', text: '캐릭터 선택', y: buttonStartY, img: loadedImages.darkGrayBtn, color: 'white' }, 
+                { id: 'leaderboardBtn', text: '명예의 전당', y: buttonStartY + btnHeight + gap, img: loadedImages.lightGrayBtn, color: 'black' }, 
+                { id: 'startBtn', text: '게임 시작', y: buttonStartY + (btnHeight + gap) * 2, img: loadedImages.darkGrayBtn, color: 'white' } 
+            ];
+            
+            mainMenuButtons.forEach(btn => { 
+                uiBoxes[btn.id] = { x: btnX, y: btn.y, width: btnWidth, height: btnHeight }; 
+                if(btn.img) ctx.drawImage(btn.img, btnX, btn.y, btnWidth, btnHeight); 
+                ctx.fillStyle = btn.color; ctx.textAlign = 'center'; 
+                ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); 
+            });
+
+            // [요청 4] 최초 접속 안내 문구 (깜빡임)
+            if (!hasPlayedOnce) {
+                // blinkTimer를 사용하여 0.2 ~ 1.0 사이의 불투명도를 계산합니다.
+                const blinkPhase = Math.abs(Math.sin(blinkTimer * Math.PI)); 
+                ctx.fillStyle = `rgba(40, 167, 69, ${blinkPhase * 0.8 + 0.2})`; // 연두색 (Greenish color)
+                ctx.font = '18px "MyGameFont"';
+                ctx.textAlign = 'center';
+                // 버튼 아래쪽에 배치
+                ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, GAME_HEIGHT - 60);
+            }
+
             const creditBtnSize = 60, creditBtnMargin = 20;
             const creditBtnX = GAME_WIDTH - creditBtnSize - creditBtnMargin, creditBtnY = GAME_HEIGHT - creditBtnSize - creditBtnMargin;
             uiBoxes.creditBtn = { x: creditBtnX, y: creditBtnY, width: creditBtnSize, height: creditBtnSize };
@@ -605,15 +637,21 @@
             ctx.fillStyle = 'white'; ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
 
-        // [수정] 닉네임 입력 및 순위 표시를 위한 UI 로직 변경
+        // [수정] 닉네임 입력 및 순위 표시를 위한 UI 로직 변경 및 키보드 가림 문제 해결
         function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
+            
+            // [요청 1] 키보드 가림 방지: 입력 포커스가 있을 경우 UI 전체를 상단으로 이동
+            const GAME_OVER_UI_SHIFT = isInputFocused ? -150 : 0; 
+            
+            const CENTER_Y = GAME_HEIGHT / 2 + GAME_OVER_UI_SHIFT;
+            
             ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; 
-            ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 160); 
+            ctx.fillText('GAME OVER', GAME_WIDTH / 2, CENTER_Y - 160); 
             
             // 1. 최종 점수 표시
             ctx.font = '24px "MyGameFont"'; 
-            ctx.fillText('Final Score: ' + score, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100); 
+            ctx.fillText('Final Score: ' + score, GAME_WIDTH / 2, CENTER_Y - 100); 
 
             // 2. 순위 표시/계산 상태
             ctx.font = 'bold 28px "MyGameFont"';
@@ -628,18 +666,18 @@
                 // 저장 전 임시 순위
                 rankText = `예상 순위: ${preliminaryRank || '??'}위`;
             }
-            ctx.fillText(rankText, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40);
+            ctx.fillText(rankText, GAME_WIDTH / 2, CENTER_Y - 40);
 
             if (finalRank === null || finalRank === 'saving') {
                 // 3. 닉네임 입력 및 버튼 (임시 순위 계산 완료 후 표시)
                 if (preliminaryRank !== 'calculating') {
                     ctx.font = '20px "MyGameFont"'; 
-                    ctx.fillText('순위에 등록할 닉네임을 입력하세요.', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20);
+                    ctx.fillText('순위에 등록할 닉네임을 입력하세요.', GAME_WIDTH / 2, CENTER_Y + 20);
 
                     // 4. 닉네임 입력 필드 (캔버스 렌더링)
                     const inputWidth = 250, inputHeight = 40;
                     const inputX = (GAME_WIDTH - inputWidth) / 2;
-                    const inputY = GAME_HEIGHT / 2 + 70; // UI를 아래로 내림
+                    const inputY = CENTER_Y + 70; // UI를 아래로 내림
                     const btnGap = 10, btnWidth = 120, btnHeight = 50;
                     const btnY = inputY + inputHeight + 40;
                     
@@ -661,19 +699,19 @@
                     if (finalRank === 'saving') {
                         drawButton(btnY, '순위 기록 중...', loadedImages.lightGrayBtn, 'black', 'saveBtn', 180, 50);
                     } else {
-                        // [수정] 버튼 순서 변경: 취소/메인(왼쪽), 등록하기(오른쪽) -> 등록하기(왼쪽), 취소/메인(오른쪽)
+                        // [요청 2] 버튼 스타일 및 텍스트 색상 변경 + 순서 유지 (등록하기: 왼쪽, 취소/메인: 오른쪽)
                         
-                        // 등록하기 버튼 (왼쪽)
-                        drawButton(btnY, '등록하기', loadedImages.darkGrayBtn, 'white', 'saveBtn', btnWidth, btnHeight, -(btnWidth / 2) - (btnGap / 2));
+                        // 등록하기 버튼 (왼쪽) - lightGray/black
+                        drawButton(btnY, '등록하기', loadedImages.lightGrayBtn, 'black', 'saveBtn', btnWidth, btnHeight, -(btnWidth / 2) - (btnGap / 2));
                         
-                        // 취소/메인 버튼 (오른쪽)
-                        drawButton(btnY, '취소/메인', loadedImages.lightGrayBtn, 'black', 'cancelBtn', btnWidth, btnHeight, (btnWidth / 2) + (btnGap / 2));
+                        // 취소/메인 버튼 (오른쪽) - darkGray/white
+                        drawButton(btnY, '취소/메인', loadedImages.darkGrayBtn, 'white', 'cancelBtn', btnWidth, btnHeight, (btnWidth / 2) + (btnGap / 2));
                     }
                 }
 
             } else { 
                 // 최종 순위 표시 후 '계속하기' 버튼
-                drawButton(GAME_HEIGHT / 2 + 100, '계속하기', loadedImages.darkGrayBtn, 'white', 'continueBtn', 180, 50); // UI를 아래로 내림
+                drawButton(CENTER_Y + 100, '계속하기', loadedImages.darkGrayBtn, 'white', 'continueBtn', 180, 50); // UI를 아래로 내림
             }
         }
 
@@ -722,7 +760,14 @@
             ctx.fillText('- 모든 이미지/사운드/폰트 파일이 있는지 확인', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 115);
         }
 
-        function drawStartScreen() { uiBoxes = {}; ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); if (startScreenState === 'main') drawMainMenu(); else if (startScreenState === 'leaderboard') drawLeaderboardScreen(); else if (startScreenState === 'characterSelect') drawCharacterSelectScreen(); else if (startScreenState === 'credit') drawCreditScreen(); }
+        function drawStartScreen() { 
+            // drawMainMenu에서 uiBoxes를 초기화하고 배경을 그립니다.
+            if (startScreenState === 'main') drawMainMenu(); 
+            else if (startScreenState === 'leaderboard') drawLeaderboardScreen(); 
+            else if (startScreenState === 'characterSelect') drawCharacterSelectScreen(); 
+            else if (startScreenState === 'credit') drawCreditScreen(); 
+            drawMuteButton(); // 모든 시작 화면에 음소거 버튼 표시
+        }
 
         function drawCurrentState() {
             const bgColor = (gameState === 'playing' && isFeverTime) ? '#e8f5e9' : '#f0f0f0';
@@ -732,7 +777,7 @@
             switch(gameState) {
                 case 'loading': ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); break;
                 case 'error': drawErrorScreen(); break;
-                case 'startScreen': drawStartScreen(); drawMuteButton(); break;
+                case 'startScreen': drawStartScreen(); break;
                 case 'playing': drawObjects(); drawPlayer(); drawGround(); drawUI(); drawMuteButton(); break;
                 case 'paused': drawObjects(); drawPlayer(); drawGround(); drawUI(false); drawPauseScreen(); drawMuteButton(); break;
                 case 'gameOver': drawObjects(); drawPlayer(); drawGround(); drawGameOver(); drawMuteButton(); break;
@@ -778,6 +823,7 @@
                 audioContext.resume().then(() => {
                     console.log('AudioContext resumed successfully.');
                     hasInteracted = true;
+                    // [요청 4] BGM 메뉴 볼륨으로 재생
                     if (!isMuted) {
                         bgm.volume = BGM_VOLUME_MENU;
                         bgm.play().catch(e => console.log("BGM play failed after AudioContext resume:", e));
@@ -799,6 +845,7 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
+            // [요청 3] 최초 터치 시 BGM 재생 시작
             if (!hasInteracted) {
                 initAudioContext();
             }
@@ -890,6 +937,9 @@
         }
         
         function resetToMainMenu() {
+            // [요청 5] 게임 플레이 후 복귀 시 플래그 설정
+            hasPlayedOnce = true;
+            
             gameState = 'startScreen'; 
             startScreenState = 'main'; 
             finalRank = null;
@@ -966,6 +1016,10 @@
         function gameLoop(timestamp) {
             sfxPlayedThisFrame = 0;
             cancelAnimationFrame(animationFrameId);
+            
+            // [요청 4] 깜빡임 타이머 업데이트
+            blinkTimer = (timestamp % 2000) / 2000; 
+
             if (gameState === 'loading' || gameState === 'error') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
             if (!lastTime) lastTime = timestamp;
             const deltaTime = timestamp - lastTime;
