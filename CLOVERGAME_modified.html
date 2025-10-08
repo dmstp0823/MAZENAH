@@ -57,7 +57,6 @@
         const GAME_HEIGHT = 960;
         const MAX_LIVES = 3;
         const BGM_VOLUME_NORMAL = 0.5;
-        // [수정 4/5] 인게임 절반 이하 볼륨 (0.5 / 2 = 0.25)
         const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2; 
         const FEVER_DURATION = 5000;
         const FEVER_TRIGGER_COUNT = 10;
@@ -65,6 +64,9 @@
         const FEVER_SPAWN_INTERVAL = 120;
         const OBJECT_POOL_SIZE = 100;
         const MAX_SFX_PER_FRAME = 3; 
+
+        // [수정 2] 게임 오버 UI 이동량 증가 (키보드 가림 방지)
+        const GAME_OVER_UI_SHIFT = -200; 
 
         const FIREBASE_CONFIG = {
             // TODO: 실제 키 문자열로 교체해야 순위표 기능이 정상 작동합니다.
@@ -603,15 +605,17 @@
                 ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); 
             });
 
-            // [요청 4] 최초 접속 안내 문구 (깜빡임)
+            // [요청 3] 깜빡임 문구 위치 조정 (게임 시작 버튼 아래, Credit 버튼 위)
             if (!hasPlayedOnce) {
                 // blinkTimer를 사용하여 0.2 ~ 1.0 사이의 불투명도를 계산합니다.
                 const blinkPhase = Math.abs(Math.sin(blinkTimer * Math.PI)); 
                 ctx.fillStyle = `rgba(40, 167, 69, ${blinkPhase * 0.8 + 0.2})`; // 연두색 (Greenish color)
                 ctx.font = '18px "MyGameFont"';
                 ctx.textAlign = 'center';
-                // 버튼 아래쪽에 배치
-                ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, GAME_HEIGHT - 60);
+                // (buttonStartY + (btnHeight + gap) * 2)는 '게임 시작' 버튼의 Y 시작점입니다.
+                // 3개의 버튼 세트 아래, Credit 버튼 위에 위치하도록 조정
+                const blinkTextY = buttonStartY + (btnHeight + gap) * 2 + btnHeight + gap + 10;
+                ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, blinkTextY);
             }
 
             const creditBtnSize = 60, creditBtnMargin = 20;
@@ -641,10 +645,10 @@
         function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
             
-            // [요청 1] 키보드 가림 방지: 입력 포커스가 있을 경우 UI 전체를 상단으로 이동
-            const GAME_OVER_UI_SHIFT = isInputFocused ? -150 : 0; 
+            // [수정 2] 키보드 가림 방지: 입력 포커스가 있을 경우 UI 전체를 상단으로 이동 (GAME_OVER_UI_SHIFT 사용)
+            const UI_SHIFT = isInputFocused ? GAME_OVER_UI_SHIFT : 0; 
             
-            const CENTER_Y = GAME_HEIGHT / 2 + GAME_OVER_UI_SHIFT;
+            const CENTER_Y = GAME_HEIGHT / 2 + UI_SHIFT;
             
             ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; 
             ctx.fillText('GAME OVER', GAME_WIDTH / 2, CENTER_Y - 160); 
@@ -699,7 +703,7 @@
                     if (finalRank === 'saving') {
                         drawButton(btnY, '순위 기록 중...', loadedImages.lightGrayBtn, 'black', 'saveBtn', 180, 50);
                     } else {
-                        // [요청 2] 버튼 스타일 및 텍스트 색상 변경 + 순서 유지 (등록하기: 왼쪽, 취소/메인: 오른쪽)
+                        // [수정] 버튼 스타일 및 텍스트 색상 변경 + 순서 유지 (등록하기: 왼쪽(lightGray), 취소/메인: 오른쪽(darkGray))
                         
                         // 등록하기 버튼 (왼쪽) - lightGray/black
                         drawButton(btnY, '등록하기', loadedImages.lightGrayBtn, 'black', 'saveBtn', btnWidth, btnHeight, -(btnWidth / 2) - (btnGap / 2));
@@ -845,7 +849,7 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [요청 3] 최초 터치 시 BGM 재생 시작
+            // [수정 1] 최초 터치 시 BGM 재생 시작 (버튼 외 영역 포함)
             if (!hasInteracted) {
                 initAudioContext();
             }
@@ -878,6 +882,10 @@
                     else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(SOUND_ASSETS.buttonClick); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
                     else if (isInside(pos, uiBoxes.startBtn)) { playSound(SOUND_ASSETS.buttonClick); init(); }
                     else if (isInside(pos, uiBoxes.creditBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'credit'; }
+                    
+                    // [수정 1] 버튼이 아닌 화면 터치 시에도 BGM이 활성화된 상태라면, 다음 로직을 건너뜁니다.
+                    // (hasInteracted는 initAudioContext()에서 true로 설정됩니다.)
+                    
                 } else {
                     if (startScreenState === 'characterSelect') { 
                         uiBoxes.characterBoxes.forEach(box => { 
@@ -1060,12 +1068,15 @@
                 if (audioContext) audioContext.resume().catch(e => console.log("AudioContext resume failed on visibility change:", e));
             }
         });
+        
+        // [수정 1] 이벤트 리스너를 document 대신 canvas에 유지하되, handleInteractionStart 로직에서 버튼 외 영역 터치를 처리
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
         canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
         canvas.addEventListener('touchend', handleInteractionEnd);
         canvas.addEventListener('mousedown', handleInteractionStart);
         canvas.addEventListener('mousemove', handleInteractionMove);
         canvas.addEventListener('mouseup', handleInteractionEnd);
+        
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
         canvas.addEventListener('wheel', handleWheel, { passive: false });
