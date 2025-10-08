@@ -32,7 +32,7 @@
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
 
-    <!-- [추가] 모든 효과음을 위한 HTML Audio 요소 -->
+    <!-- [추가] 모든 효과음을 위한 HTML Audio 요소 컨테이너 (비활성화 상태) -->
     <div id="sfx-container" style="display: none;"></div>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -71,8 +71,8 @@
 
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
-            darkGrayBtn: './darkgray.png', // [수정] 경로 대소문자 통일 (d, g 소문자)
-            lightGrayBtn: './lightgray.png', // [수정] 경로 대소문자 통일 (l, g 소문자)
+            darkGrayBtn: './darkgray.png', 
+            lightGrayBtn: './lightgray.png', 
             major: './major.png',
             yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
             soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
@@ -120,7 +120,7 @@
         // [기능 유지] 비동기 순위 저장
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
-        // [오디오 복구 기반] loadAsset: HTML Audio 요소로 만듭니다.
+        // [HTML Audio] loadAsset: HTML Audio 요소로 만듭니다.
         async function loadAsset(type, name, src) {
             if (type === 'image') {
                 return new Promise((resolve, reject) => {
@@ -128,7 +128,7 @@
                     img.src = src;
                     img.onload = () => {
                         loadedImages[name] = img; 
-                        if (name === 'character') resolve(img);
+                        if (name.startsWith('char')) resolve(img);
                         else { resolve(); }
                     };
                     img.onerror = () => reject(`${type} 로드 실패: ${src}`);
@@ -148,40 +148,50 @@
         async function loadGameAssets() {
             const imagePromises = Object.entries(IMAGE_ASSETS).map(([name, src]) => loadAsset('image', name, src));
             const charImagePromises = characters.flatMap(char => [
-                loadAsset('image', 'character', char.imgSrc).then(img => { char.img = img; char.originalWidth = img.naturalWidth; char.originalHeight = img.naturalHeight; }),
-                loadAsset('image', 'character', char.imgSrcSelected).then(img => char.imgSelected = img),
-                loadAsset('image', 'character', char.imgIconSrc).then(img => char.imgIcon = img),
-                char.imgHitSrc ? loadAsset('image', 'character', char.imgHitSrc).then(img => char.imgHit = img) : Promise.resolve()
+                loadAsset('image', 'char_img', char.imgSrc).then(img => { char.img = img; char.originalWidth = img.naturalWidth; char.originalHeight = img.naturalHeight; }),
+                loadAsset('image', 'char_selected', char.imgSrcSelected).then(img => char.imgSelected = img),
+                loadAsset('image', 'char_icon', char.imgIconSrc).then(img => char.imgIcon = img),
+                char.imgHitSrc ? loadAsset('image', 'char_hit', char.imgHitSrc).then(img => char.imgHit = img) : Promise.resolve()
             ]);
             const soundSrcs = [...new Set([...Object.values(SOUND_ASSETS), ...characters.flatMap(c => [c.selectSfxSrc, c.hitSfxSrc])].filter(Boolean))];
             const soundPromises = soundSrcs.map(src => loadAsset('sound', null, src));
             
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
-
+        
         // [SFX Fix] 모든 SFX 파일을 음소거 상태로 한 번 재생하여 브라우저에 승인받도록 합니다.
         function unlockAllSfx() {
+            const sfxContainer = document.getElementById('sfx-container');
             for (const src in sfxPool) {
                 if (sfxPool.hasOwnProperty(src)) {
                     const audio = sfxPool[src].cloneNode(true);
                     audio.muted = true; 
                     audio.volume = 0;
-                    audio.play().catch(e => console.log(`SFX unlock attempt failed for ${src}`, e));
-                    // 재생 직후 일시 정지 (메모리 및 리소스 절약을 위해 좋습니다.)
-                    audio.pause();
-                    audio.remove();
+                    
+                    // 컨테이너에 추가하여 DOM 상에 존재하도록 함
+                    sfxContainer.appendChild(audio); 
+                    
+                    audio.play().then(() => {
+                        // 재생 직후 일시 정지 및 제거
+                        audio.pause();
+                        audio.remove();
+                    }).catch(e => {
+                         // 실패해도 warning만 띄우고 계속 진행
+                        console.log(`SFX unlock attempt failed for ${src}`, e);
+                        audio.remove(); 
+                    });
                 }
             }
         }
 
-        // [오디오 복구 기반] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
+        // [HTML Audio] playSound: cloneNode를 사용하여 동시 재생을 구현합니다.
         function playSound(src, volume = 1.0) {
             if (isMuted || !sfxPool[src] || !hasInteracted) return; 
 
             // 쿨다운 로직은 유지
+            const now = performance.now();
+            const cooldown = 75;
             if (src === SOUND_ASSETS.clover) {
-                const now = performance.now();
-                const cooldown = 75;
                 if (sfxLastPlayed[src] && now - sfxLastPlayed[src] < cooldown) { return; }
                 sfxLastPlayed[src] = now;
             }
@@ -191,10 +201,16 @@
                 const originalAudio = sfxPool[src];
                 const clone = originalAudio.cloneNode(true);
                 clone.volume = volume;
+                
+                // 재생 후 스스로 제거
                 clone.onended = () => clone.remove();
 
-                // 충돌 효과음(비사용자 입력)이 재생되도록 바로 시도합니다.
+                // 재생 전 상태 초기화
+                clone.currentTime = 0; 
+                
+                // [핵심] 충돌 효과음(비사용자 입력)이 재생되도록 바로 시도합니다.
                 clone.play().catch(e => console.warn(`SFX playback (${src}) failed on HTML Audio:`, e));
+                
             } catch (e) {
                 console.error("SFX playback failed:", e);
             }
@@ -355,7 +371,7 @@
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
 
-        // [수정] drawLeaderboardScreen: 순위별 이미지 로직 변경 (4~10위 silver, 11위~ gray)
+        // [기능 유지] 순위표 30위까지 표시 및 이미지 로직
         function drawLeaderboardScreen() {
             let listStartY = GAME_HEIGHT * 0.15; 
             const majorImg = loadedImages.major;
@@ -384,16 +400,16 @@
                 ctx.rect(0, listStartY, GAME_WIDTH, scrollableAreaHeight);
                 ctx.clip();
                 cachedLeaderboard.forEach((entry, index) => {
-                    const rank = index + 1; // 1부터 시작하는 순위
+                    const rank = index + 1;
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     let boxImg;
                     
                     if (rank <= 3) {
                         boxImg = loadedImages.yellow; // 1~3위: Yellow
-                    } else if (rank <= 10) { // [수정] 10위까지 Silver
+                    } else if (rank <= 30) { // 4~30위: Silver (30위까지 표시하도록 쿼리 변경됨)
                         boxImg = loadedImages.silver; 
                     } else {
-                        boxImg = loadedImages.gray; // 11위~: Gray
+                        boxImg = loadedImages.gray; // 31위~: Gray
                     }
                     
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
@@ -478,6 +494,7 @@
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
+            // [수정] TOP 30 안내 텍스트로 변경
             const line5_part1 = "점수가 TOP 30 안에 든다면 "; 
             const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
@@ -607,7 +624,7 @@
             }
         }
 
-        // [이벤트 처리] 오디오 활성화 로직 복구 (가장 안정적인 패턴)
+        // [이벤트 처리] 오디오 활성화 로직 (HTML Audio 기반)
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
@@ -702,8 +719,6 @@
         }
 
         async function main() {
-            // Web Audio API 관련 코드 삭제됨. HTML Audio는 Context 초기화가 필요 없습니다.
-
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
