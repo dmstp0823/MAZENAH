@@ -71,7 +71,7 @@
 
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
-            darkGrayBtn: './darkgray.png', lightGrayBtn: './lightgray.png', major: './major.png',
+            darkGrayBtn: './darkGray.png', lightGrayBtn: './lightGray.png', major: './major.png',
             yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
             soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
         };
@@ -103,7 +103,6 @@
         let sfxPool = {}; // HTML Audio 객체를 저장합니다. 
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
-        // audioContext 변수는 HTML Audio로 전환하면서 제거되었습니다.
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -157,9 +156,23 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
+        // **[SFX Fix 1/2]** 모든 SFX 파일을 음소거 상태로 한 번 재생하여 브라우저에 승인받도록 합니다.
+        function unlockAllSfx() {
+            for (const src in sfxPool) {
+                if (sfxPool.hasOwnProperty(src)) {
+                    const audio = sfxPool[src].cloneNode(true);
+                    audio.muted = true; // 소리 없이 재생
+                    audio.volume = 0;
+                    audio.play().catch(e => console.log(`SFX unlock attempt failed for ${src}`, e));
+                    // 재생 직후 일시 정지 (메모리 및 리소스 절약을 위해 좋습니다.)
+                    audio.pause();
+                    audio.remove();
+                }
+            }
+        }
+
         // [수정] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
         function playSound(src, volume = 1.0) {
-            // [Web Audio API 관련 로직 제거: audioContext 검사 제거]
             if (isMuted || !sfxPool[src] || !hasInteracted) return; // hasInteracted 체크를 유지합니다.
 
             // 쿨다운 로직은 유지
@@ -178,11 +191,7 @@
 
                 clone.onended = () => clone.remove();
 
-                // **[SFX Fix]** 비(非) 사용자 입력 이벤트(충돌)에서 재생을 강제하기 위한 트릭
-                clone.pause();
-                clone.currentTime = 0;
-
-                // 모바일 환경에서 재생이 거부될 수 있으므로 Promise를 무시합니다.
+                // **[SFX Fix 2/2]** 불안정한 리셋 트릭 제거 및 단순 play() 시도
                 clone.play().catch(e => console.warn(`SFX playback (${src}) failed on HTML Audio:`, e));
             } catch (e) {
                 console.error("SFX playback failed:", e);
@@ -597,9 +606,7 @@
             if (!hasInteracted) {
                 hasInteracted = true;
                 
-                // 1. Web Audio Context 관련 코드 제거됨 (ReferenceError 수정)
-                
-                // 2. BGM play 시도 (HTML Audio)
+                // 1. BGM play 시도 (HTML Audio)
                 const playPromise = bgm.play();
                 
                 if (playPromise !== undefined) {
@@ -608,6 +615,9 @@
                         hasInteracted = false; 
                     });
                 }
+                
+                // **[SFX Fix 1/2]** 모든 SFX를 음소거 상태로 재생 시도하여 브라우저 승인을 얻습니다.
+                unlockAllSfx();
             }
             
             // [복구] 음소거 버튼 클릭 로직
@@ -683,9 +693,6 @@
         }
 
         async function main() {
-            // [Web Audio API 제거]
-            // audioContext 생성 코드 제거됨
-
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
