@@ -94,6 +94,7 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
+        // hasInteracted는 오직 BGM 재생 여부를 결정합니다. Web Audio Context 활성화는 resumeAudioContext에서 독립적으로 처리합니다.
         let hasInteracted = false, isMuted = false;
         let finalRank = null;
         
@@ -153,8 +154,26 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
+        // Context resume을 논블로킹 방식으로 실행
+        function resumeAudioContext() {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().catch(error => {
+                    // console.error("AudioContext resume failed:", error); // 디버깅용 로그, 실제로 실패할 수 있음
+                });
+            }
+        }
+        
         function playSound(src, volume = 1.0) {
-            if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return;
+            // hasInteracted는 BGM 재생 여부만 통제. 효과음은 Context 상태를 직접 확인
+            if (!audioContext || isMuted || !sfxPool[src]) return; 
+            
+            // Context가 실행 중이 아니라면 강제 재개 시도 (모바일 크롬 정책 우회)
+            if (audioContext.state !== 'running') {
+                resumeAudioContext();
+                // Context가 즉시 실행되지 않았으므로 소리 재생을 건너뛰고 다음 프레임에서 재시도하도록 함
+                return; 
+            }
+
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
             sfxPlayedThisFrame++;
             const now = performance.now();
@@ -163,12 +182,6 @@
                 if (sfxLastPlayed[src] && now - sfxLastPlayed[src] < cooldown) { return; }
             }
             sfxLastPlayed[src] = now;
-            
-            // Web Audio Context 상태가 suspended면 비동기적으로 재개 시도
-            if (audioContext.state === 'suspended') {
-                // 비동기적으로 Context 활성화 시도. (성공하면 다음 턴에 효과음이 들림)
-                audioContext.resume().catch(e => console.error("AudioContext resume failed in playSound:", e));
-            }
             
             // Web Audio Source 노드 생성
             const source = audioContext.createBufferSource();
@@ -197,7 +210,20 @@
             const playerWidth = GAME_WIDTH * 0.2;
             const aspectRatio = char.originalHeight / char.originalWidth;
             const playerHeight = playerWidth * aspectRatio;
-            player = { width: playerWidth, height: playerHeight, x: GAME_WIDTH / 2 - playerWidth / 2, y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), speed: char.speed, img: char.img, originalImg: char.img, hitImg: char.imgHit, hitTimer: 0, dx: 0 };
+            // [수정] player 객체에 충돌 이미지(imgHit)를 할당합니다.
+            player = { 
+                width: playerWidth, 
+                height: playerHeight, 
+                x: GAME_WIDTH / 2 - playerWidth / 2, 
+                y: GAME_HEIGHT - playerHeight - (GAME_HEIGHT * 0.1), 
+                speed: char.speed, 
+                img: char.img, 
+                originalImg: char.img, 
+                imgHit: char.imgHit, // 충돌 시 사용할 이미지
+                hitTimer: 0, 
+                dx: 0 
+            };
+
             targetX = player.x; score = 0; spawnTimer = 0;
             gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
             lives = MAX_LIVES; gameState = 'playing';
@@ -208,9 +234,7 @@
             bgm.volume = BGM_VOLUME_NORMAL;
             
             // Web Audio Context 활성화 재시도 (안전 장치)
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().catch(e => console.error("AudioContext resume failed on init:", e));
-            }
+            resumeAudioContext();
 
             if (hasInteracted && bgm.paused) {
                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
@@ -277,7 +301,7 @@
         function handleCollision(obj) {
             if (obj.type === 'bad') {
                 lives--;
-                player.hitTimer = 500;
+                player.hitTimer = 500; // 0.5초 동안 충돌 이미지 표시
                 const char = characters.find(c => c.id === selectedCharacterId);
                 if (char) playSound(char.hitSfxSrc, char.hitVolume);
                 playSound(SOUND_ASSETS.bombHit, 1.0);
@@ -290,7 +314,30 @@
         }
         
         // --- 렌더링 ---
-        function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.imgHit : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
+        function drawPlayer() { 
+            // [수정] 충돌 타이머가 0보다 클 때, 충돌 이미지(imgHit)가 아닌 
+            // 캐릭터의 투명도를 조절하여 깜빡이는 효과를 줍니다.
+            const currentImg = player.originalImg;
+            if (!currentImg) return;
+
+            ctx.save();
+            
+            if (player.hitTimer > 0) {
+                // 충돌 상태일 때 투명도를 조절하여 깜빡임 효과 (0.5초 동안 100ms마다 투명/불투명 전환)
+                const flashRate = 100; // 100ms
+                const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
+                if (!isVisible) {
+                    // 캐릭터를 잠시 숨기는 대신, 투명도를 낮춥니다.
+                    ctx.globalAlpha = 0.5; // 투명도 50%
+                }
+            } else {
+                 ctx.globalAlpha = 1.0; // 기본 투명도
+            }
+            
+            ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); 
+            ctx.restore();
+        }
+        
         function drawObjects() { objectPool.forEach(obj => { if (!obj.active) return; let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
@@ -565,32 +612,22 @@
             }
         }
 
-        // Context resume을 논블로킹 방식으로 실행
-        function resumeAudioContext() {
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().catch(error => {
-                    console.error("AudioContext resume failed:", error);
-                });
-            }
-        }
-
         function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정] 최초 상호작용 및 BGM 활성화 시점
+            // [핵심 수정] 최초 상호작용 시 BGM과 Context를 동시에 활성화 시도
             if (!hasInteracted) {
                 hasInteracted = true; 
                 resumeAudioContext(); 
                 
-                // HTML Audio 요소 재생 시도.
+                // HTML Audio 요소 재생 시도. (Context가 활성화되면 BGM도 재생 가능)
                 bgm.play().catch(error => {
                     console.warn("BGM play failed due to autoplay policy or other error:", error);
                 });
             }
             
             // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (모바일 크롬의 엄격한 정책 대응)
-            // 터치 이벤트를 Web Audio Context 활성화에 사용합니다.
             resumeAudioContext();
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
@@ -665,6 +702,9 @@
                 gameLoop(0);
                 return;
             }
+            // [추가] Web Audio Context 생성 직후 한 번 더 활성화 시도
+            resumeAudioContext();
+
             initializeFirebase();
             setRealViewportHeight();
             bgm.volume = BGM_VOLUME_MENU;
@@ -698,7 +738,6 @@
                 }
             }
         });
-        // handleInteractionStart가 이제 비동기 함수가 아니므로 async를 제거합니다.
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
         canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
         canvas.addEventListener('touchend', handleInteractionEnd);
