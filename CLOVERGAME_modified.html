@@ -164,8 +164,9 @@
             }
             sfxLastPlayed[src] = now;
             
-            // [수정] Web Audio Context 상태가 suspended면 재개 시도 (모든 효과음 재생 시)
+            // Web Audio Context 상태가 suspended면 재개 시도 (모든 효과음 재생 시)
             if (audioContext.state === 'suspended') {
+                // 비동기적으로 Context 활성화 시도. (성공하면 다음 턴에 효과음이 들림)
                 audioContext.resume().catch(e => console.error("AudioContext resume failed in playSound:", e));
             }
             
@@ -206,7 +207,7 @@
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
             
-            // [기존 로직 유지] 게임 시작 시 Web Audio Context 활성화를 재시도 (안전 장치)
+            // Web Audio Context 활성화 재시도 (안전 장치)
             if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume().catch(e => console.error("AudioContext resume failed on init:", e));
             }
@@ -564,9 +565,14 @@
             }
         }
 
+        // [수정] Context resume을 await 가능한 비동기 함수로 변경
         async function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().catch(error => console.error("AudioContext resume failed:", error));
+                try {
+                    await audioContext.resume();
+                } catch (error) {
+                    console.error("AudioContext resume failed:", error);
+                }
             }
         }
 
@@ -574,10 +580,10 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정] 최초 상호작용 시 BGM 및 Web Audio Context 활성화
+            // [수정] 최초 상호작용 시 Web Audio Context 활성화가 완료될 때까지 기다림
             if (!hasInteracted) {
                 hasInteracted = true; 
-                resumeAudioContext(); // Web Audio Context 활성화 시도
+                await resumeAudioContext(); // await 추가
                 
                 // HTML Audio 요소 재생 시도.
                 bgm.play().catch(error => {
@@ -588,7 +594,7 @@
             // [수정] 모든 UI 상호작용 시작 시 Context 재활성화 시도 (사파리/모바일 안정성 확보)
             // 메인 메뉴의 어떤 버튼을 누르든 효과음 활성화를 시도함
             if (gameState === 'startScreen' || gameState === 'paused') {
-                resumeAudioContext();
+                await resumeAudioContext(); // await 추가
             }
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
