@@ -191,7 +191,7 @@
 
                 clone.onended = () => clone.remove();
 
-                // **[SFX Fix 2/2]** 불안정한 리셋 트릭 제거 및 단순 play() 시도
+                // **[SFX Fix 2/2]** 충돌 효과음을 재생하기 위해 복잡한 트릭 대신, 승인된 상태를 믿고 바로 재생 시도
                 clone.play().catch(e => console.warn(`SFX playback (${src}) failed on HTML Audio:`, e));
             } catch (e) {
                 console.error("SFX playback failed:", e);
@@ -351,7 +351,7 @@
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
 
-        // [기능 유지] 순위표 30위까지 표시 (silver box 포함)
+        // [수정] drawLeaderboardScreen: 순위별 이미지 로직 변경
         function drawLeaderboardScreen() {
             let listStartY = GAME_HEIGHT * 0.15; 
             const majorImg = loadedImages.major;
@@ -380,11 +380,18 @@
                 ctx.rect(0, listStartY, GAME_WIDTH, scrollableAreaHeight);
                 ctx.clip();
                 cachedLeaderboard.forEach((entry, index) => {
+                    const rank = index + 1; // 1부터 시작하는 순위
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     let boxImg;
-                    if (index < 3) { boxImg = loadedImages.yellow; }
-                    else if (index < 30) { boxImg = loadedImages.silver; } // 30위까지 silver 박스 사용
-                    else { boxImg = loadedImages.gray; }
+                    
+                    if (rank <= 3) {
+                        boxImg = loadedImages.yellow; // 1~3위: Yellow
+                    } else if (rank <= 10) {
+                        boxImg = loadedImages.silver; // 4~10위: Silver
+                    } else {
+                        boxImg = loadedImages.gray; // 11위~: Gray
+                    }
+                    
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
                     const character = characters.find(c => c.name === entry.character);
@@ -394,7 +401,7 @@
                         ctx.textAlign = 'left';
                         ctx.fillText(entry.name, iconX + iconSize + 10, boxY + 25);
                     } else { ctx.textAlign = 'left'; ctx.fillText(entry.name, rankTextX + 35, boxY + 25); }
-                    ctx.fillText(`${index + 1}.`, rankTextX, boxY + 25);
+                    ctx.fillText(`${rank}.`, rankTextX, boxY + 25);
                     ctx.textAlign = 'right';
                     ctx.fillText(entry.score, (GAME_WIDTH + boxWidth) / 2 - 20, boxY + 25);
                 });
@@ -469,7 +476,7 @@
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
-            const line5_part1 = "점수가 TOP 30 안에 든다면 "; // 30위까지 표시하도록 텍스트 수정
+            const line5_part1 = "점수가 TOP 30 안에 든다면 "; 
             const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
