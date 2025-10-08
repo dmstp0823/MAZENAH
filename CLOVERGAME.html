@@ -53,13 +53,13 @@
         const MAX_SFX_PER_FRAME = 3; 
 
         const FIREBASE_CONFIG = {
-            apiKey: "새로 발급받은 키 문자열", // <-- 앞뒤로 따옴표 확인, 쉼표 확인
-            authDomain: "clovergame-e712f.firebaseapp.com", // <-- 쉼표 확인
-            projectId: "clovergame-e712f", // <-- 쉼표 확인
-            storageBucket: "clovergame-e712f.appspot.com", // <-- 쉼표 확인
-            messagingSenderId: "525191060039", // <-- 쉼표 확인
-            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62" // <-- 마지막 항목이므로 쉼표 없음
-        }; // <-- 닫는 중괄호
+    apiKey: "새로 발급받은 키 문자열", // <-- 앞뒤로 따옴표 확인, 쉼표 확인
+    authDomain: "clovergame-e712f.firebaseapp.com", // <-- 쉼표 확인
+    projectId: "clovergame-e712f", // <-- 쉼표 확인
+    storageBucket: "clovergame-e712f.appspot.com", // <-- 쉼표 확인
+    messagingSenderId: "525191060039", // <-- 쉼표 확인
+    appId: "1:525191060039:web:5707417e6e8ee8bf9cef62" // <-- 마지막 항목이므로 쉼표 없음
+}; // <-- 닫는 중괄호
         
         const characters = [
             { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.9, hitVolume: 1.0 },
@@ -108,59 +108,8 @@
 
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
-        
-        function listenForLeaderboardUpdates() {
-            if (!leaderboardCollection) return;
-            // 여기 limit의 숫자를 10에서 20으로 변경합니다.
-            leaderboardCollection.orderBy('score', 'desc').limit(20).onSnapshot(snapshot => {
-                cachedLeaderboard = [];
-                snapshot.forEach(doc => cachedLeaderboard.push(doc.data()));
-            }, error => {
-                console.error("순위표 실시간 로딩 오류: ", error);
-                cachedLeaderboard = [];
-            });
-        }
-
+        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(10).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
-
-        // [추가] 등수를 확인하고 점수를 저장하는 새로운 함수
-        async function checkRankAndSave(finalScore) {
-            if (!leaderboardCollection) {
-                const nickname = prompt(`게임 오버!\n최종 점수: ${finalScore}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
-                if (nickname && nickname.trim() !== '') { await saveToLeaderboard(finalScore, nickname.trim()); }
-                return;
-            }
-
-            try {
-                // 내 점수보다 높은 점수를 가진 기록들의 수를 센다.
-                const higherScoresSnapshot = await leaderboardCollection.where('score', '>', finalScore).get();
-                const rank = higherScoresSnapshot.size + 1; // (나보다 잘한 사람 수) + 1 = 나의 등수
-
-                let message = `게임 오버!\n최종 점수: ${finalScore}\n\n`;
-
-                // 20위 안에 들었을 경우 축하 메시지와 등수를 표시
-                if (rank <= 20) {
-                    message += `축하합니다! 전체 순위 ${rank}등입니다! 🏆\n순위에 등록할 닉네임을 입력하세요:`;
-                } else {
-                    message += `아쉽지만 순위권(20위) 밖입니다.\n다음에 다시 도전해주세요! 💪`;
-                }
-
-                const nickname = prompt(message, '');
-
-                // 닉네임을 입력했다면 점수를 저장
-                if (nickname && nickname.trim() !== '') {
-                    await saveToLeaderboard(finalScore, nickname.trim());
-                }
-
-            } catch (error) {
-                console.error("순위 확인 중 오류 발생:", error);
-                // 혹시 오류가 나더라도 점수는 저장할 수 있도록 fallback 처리
-                const nickname = prompt(`게임 오버!\n최종 점수: ${finalScore}\n\n순위 확인 중 오류가 발생했습니다. 닉네임을 입력해 점수를 저장하세요:`, '');
-                if (nickname && nickname.trim() !== '') {
-                    await saveToLeaderboard(finalScore, nickname.trim());
-                }
-            }
-        }
 
         // [수정] loadAsset 함수를 Web Audio API 방식으로 완전히 교체
         async function loadAsset(type, name, src) {
@@ -469,7 +418,7 @@
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
-            const line5_part1 = "점수가 TOP 20 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
+            const line5_part1 = "점수가 TOP 10 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
             const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
@@ -620,18 +569,10 @@
                 if (isInside(pos, uiBoxes.resumeBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
                 else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play(); }
             } else if (gameState === 'gameOver') {
-                // 게임오버 시, 바로 닉네임을 묻는 대신 새로 만든 등수 확인 함수를 호출합니다.
-                checkRankAndSave(score).then(() => {
-                    // 점수 저장 과정(닉네임 입력 등)이 모두 끝나면 메인 화면으로 전환합니다.
-                    gameState = 'startScreen';
-                    startScreenState = 'main';
-                    lastTime = 0;
-                    bgm.volume = BGM_VOLUME_MENU;
-                    bgm.currentTime = 0;
-                    bgm.play();
-                });
-                // checkRankAndSave 함수가 비동기(async)로 작동하므로,
-                // 바로 다음 코드로 넘어가지 않도록 gameState를 'gameOver'로 유지합니다.
+                const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
+                if (nickname && nickname.trim() !== '') { saveToLeaderboard(score, nickname.trim()); }
+                gameState = 'startScreen'; startScreenState = 'main'; lastTime = 0;
+                bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play();
             }
         }
         function handleInteractionMove(e) { e.preventDefault(); const pos = getEventPos(e); if (gameState === 'startScreen' && startScreenState === 'leaderboard' && isDragging) { const deltaY = pos.y - lastTouchY; leaderboardScrollY += deltaY; lastTouchY = pos.y; } else if (gameState === 'playing') { player.dx = 0; targetX = pos.x - player.width / 2; } }
