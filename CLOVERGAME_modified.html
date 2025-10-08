@@ -158,7 +158,7 @@
         function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume().catch(error => {
-                    // console.error("AudioContext resume failed:", error); // 디버깅용 로그, 실제로 실패할 수 있음
+                    // console.error("AudioContext resume failed:", error); 
                 });
             }
         }
@@ -167,13 +167,14 @@
             // hasInteracted는 BGM 재생 여부만 통제. 효과음은 Context 상태를 직접 확인
             if (!audioContext || isMuted || !sfxPool[src]) return; 
             
-            // Context가 실행 중이 아니라면 강제 재개 시도 (모바일 크롬 정책 우회)
-            if (audioContext.state !== 'running') {
+            // Context가 실행 중이 아니라면 비동기적으로 재개 시도
+            if (audioContext.state === 'suspended') {
                 resumeAudioContext();
-                // Context가 즉시 실행되지 않았으므로 소리 재생을 건너뛰고 다음 프레임에서 재시도하도록 함
-                return; 
             }
 
+            // Context가 running이 아닐 수도 있지만, 소리 재생을 시도하여
+            // Context 활성화를 도울 가능성을 열어둡니다. (모바일 크롬 정책 우회)
+            
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
             sfxPlayedThisFrame++;
             const now = performance.now();
@@ -210,7 +211,6 @@
             const playerWidth = GAME_WIDTH * 0.2;
             const aspectRatio = char.originalHeight / char.originalWidth;
             const playerHeight = playerWidth * aspectRatio;
-            // [수정] player 객체에 충돌 이미지(imgHit)를 할당합니다.
             player = { 
                 width: playerWidth, 
                 height: playerHeight, 
@@ -315,27 +315,35 @@
         
         // --- 렌더링 ---
         function drawPlayer() { 
-            // [수정] 충돌 타이머가 0보다 클 때, 충돌 이미지(imgHit)가 아닌 
-            // 캐릭터의 투명도를 조절하여 깜빡이는 효과를 줍니다.
-            const currentImg = player.originalImg;
-            if (!currentImg) return;
-
-            ctx.save();
+            // 캐릭터의 기본 이미지
+            let imgToDraw = player.originalImg;
             
+            // 충돌 상태인 경우
             if (player.hitTimer > 0) {
-                // 충돌 상태일 때 투명도를 조절하여 깜빡임 효과 (0.5초 동안 100ms마다 투명/불투명 전환)
+                // --- [수정된 깜빡임 로직: Hit Image 표시] ---
                 const flashRate = 100; // 100ms
                 const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
-                if (!isVisible) {
-                    // 캐릭터를 잠시 숨기는 대신, 투명도를 낮춥니다.
-                    ctx.globalAlpha = 0.5; // 투명도 50%
+
+                ctx.save();
+                
+                if (isVisible) {
+                    // 1. 보이는 프레임: 충돌 이미지(imgHit)가 있다면 그것을 사용하고, 없다면 기본 이미지 사용
+                    // 투명도를 낮추지 않고 완전히 불투명하게 그립니다.
+                    imgToDraw = player.imgHit || player.originalImg;
+                } else {
+                    // 2. 안 보이는 프레임: 이미지를 그리지 않음 (표준 무적 시간 깜빡임)
+                    imgToDraw = null; 
                 }
-            } else {
-                 ctx.globalAlpha = 1.0; // 기본 투명도
             }
             
-            ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); 
-            ctx.restore();
+            // Draw the determined image
+            if (imgToDraw) {
+                ctx.drawImage(imgToDraw, player.x, player.y, player.width, player.height);
+            }
+
+            if (player.hitTimer > 0) {
+                ctx.restore(); // ctx.save()로 저장했던 상태로 복원 (globalAlpha 초기화)
+            }
         }
         
         function drawObjects() { objectPool.forEach(obj => { if (!obj.active) return; let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
@@ -616,10 +624,26 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [핵심 수정] 최초 상호작용 시 BGM과 Context를 동시에 활성화 시도
+            // [핵심 수정] 최초 상호작용 시 Web Audio Context를 강제 활성화 (Silent Buffer Unlock)
             if (!hasInteracted) {
                 hasInteracted = true; 
-                resumeAudioContext(); 
+                
+                // 1. Resume Context (non-blocking)
+                if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                    audioContext.resume().catch(e => console.error("Context resume failed on first tap:", e));
+                }
+                
+                // 2. Aggressive unlock technique (create/start/stop a silent buffer)
+                try {
+                    const buffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioContext.destination);
+                    source.start(0);
+                    source.stop(0); 
+                } catch (e) {
+                    console.log("Silent buffer creation failed, likely context not ready yet.");
+                }
                 
                 // HTML Audio 요소 재생 시도. (Context가 활성화되면 BGM도 재생 가능)
                 bgm.play().catch(error => {
@@ -627,7 +651,7 @@
                 });
             }
             
-            // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (모바일 크롬의 엄격한 정책 대응)
+            // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (안전 장치)
             resumeAudioContext();
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
@@ -702,7 +726,7 @@
                 gameLoop(0);
                 return;
             }
-            // [추가] Web Audio Context 생성 직후 한 번 더 활성화 시도
+            // Web Audio Context 생성 직후 활성화 시도
             resumeAudioContext();
 
             initializeFirebase();
