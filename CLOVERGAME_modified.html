@@ -166,6 +166,7 @@
             
             // Web Audio Context 상태가 suspended면 비동기적으로 재개 시도
             if (audioContext.state === 'suspended') {
+                // 비동기적으로 Context 활성화 시도. (성공하면 다음 턴에 효과음이 들림)
                 audioContext.resume().catch(e => console.error("AudioContext resume failed in playSound:", e));
             }
             
@@ -564,7 +565,7 @@
             }
         }
 
-        // [수정] Context resume을 await 가능한 비동기 함수로 변경 -> 다시 동기 실행으로 변경 (await 제거)
+        // Context resume을 논블로킹 방식으로 실행
         function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume().catch(error => {
@@ -573,15 +574,14 @@
             }
         }
 
-        // [수정] async 제거, handleInteractionStart 함수 내부의 await 모두 제거
         function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // 최초 상호작용 시 Web Audio Context 활성화 및 BGM 재생 (논블로킹)
+            // [수정] 최초 상호작용 및 BGM 활성화 시점
             if (!hasInteracted) {
                 hasInteracted = true; 
-                resumeAudioContext(); // await 제거
+                resumeAudioContext(); 
                 
                 // HTML Audio 요소 재생 시도.
                 bgm.play().catch(error => {
@@ -589,10 +589,9 @@
                 });
             }
             
-            // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (논블로킹)
-            if (gameState === 'startScreen' || gameState === 'paused') {
-                resumeAudioContext(); // await 제거
-            }
+            // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (모바일 크롬의 엄격한 정책 대응)
+            // 터치 이벤트를 Web Audio Context 활성화에 사용합니다.
+            resumeAudioContext();
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
@@ -611,6 +610,9 @@
                     if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'main'; leaderboardScrollY = 0; } }
                 }
             } else if (gameState === 'playing') {
+                // 게임 화면 탭 시에도 Context 활성화 시도
+                resumeAudioContext(); 
+
                 if (isInside(pos, pauseButtonBox)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'paused'; bgm.pause(); }
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
