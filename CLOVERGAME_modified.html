@@ -164,7 +164,7 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
         
-        // [오디오 복구] Web Audio Context 활성화 유틸리티 (await 제거하여 논블로킹 시도 유지)
+        // [오디오 보강] Web Audio Context 활성화 유틸리티
         async function unlockAudioContext() {
             if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
                 // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
@@ -523,7 +523,7 @@
             const creditBtnX = GAME_WIDTH - creditBtnSize - creditBtnMargin, creditBtnY = GAME_HEIGHT - creditBtnSize - creditBtnMargin;
             uiBoxes.creditBtn = { x: creditBtnX, y: creditBtnY, width: creditBtnSize, height: creditBtnSize };
             if (loadedImages.circleBtn) ctx.drawImage(loadedImages.circleBtn, creditBtnX, creditBtnY, creditBtnSize, creditBtnSize);
-            ctx.fillStyle = 'black'; ctx.font = `bold ${creditBtnSize * 0.25}px "MyGameFont"';
+            ctx.fillStyle = 'black'; ctx.font = `bold ${creditBtnSize * 0.25}px "MyGameFont"`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('Credit', creditBtnX + creditBtnSize / 2, creditBtnY + creditBtnSize / 2);
             ctx.textBaseline = 'alphabetic';
@@ -634,7 +634,7 @@
         }
 
         // [오디오 보강] Web Audio Context 활성화 유틸리티
-        async function unlockAudioContext() {
+        function unlockAudioContext() {
             if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
                 // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
                 return audioContext.resume().then(() => true).catch(e => {
@@ -642,11 +642,11 @@
                     return false;
                 });
             }
-            return true;
+            return Promise.resolve(true); // Promise를 반환하도록 수정
         }
 
         // [이벤트 처리] 오디오 활성화 로직 복구 (가장 안정적인 패턴)
-        async function handleInteractionStart(e) {
+        function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
