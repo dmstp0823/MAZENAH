@@ -156,11 +156,9 @@
             const soundPromises = soundSrcs.map(src => loadAsset('sound', null, src));
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
-
-        // [제거] 불필요한 resumeAudioContext 함수 제거 (Context 활성화는 handleInteractionStart에서만 처리)
         
         function playSound(src, volume = 1.0) {
-            // [수정] 오직 hasInteracted가 true일 때만 playSound가 시도되도록 원본 로직으로 복귀
+            // hasInteracted가 false이거나, 음소거, 또는 sfxPool에 없으면 재생 시도하지 않음
             if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
             
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
@@ -221,8 +219,6 @@
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
             
-            // [제거] init에서 Context 활성화 시도 제거 (hasInteracted에서만 처리)
-
             if (hasInteracted && bgm.paused) {
                 // hasInteracted가 true면 Context는 활성화되었다고 가정하고 BGM 재생만 시도
                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
@@ -612,23 +608,26 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정] Web Audio Context 활성화 로직을 원본처럼 단순하게 복구
+            // [핵심 수정] Context 활성화 실패 시 hasInteracted를 false로 되돌려 다음 탭에서 재시도하도록 함
             if (!hasInteracted) {
                 hasInteracted = true; 
                 
-                // Context가 suspended 상태일 때만 resume 시도
+                // Context가 suspended 상태일 때 resume 시도
                 if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
                     audioContext.resume().catch(e => console.error("Context resume failed on first tap:", e));
                 }
                 
-                // BGM 재생 시도 (실패 시 hasInteracted를 false로 되돌리지 않음)
-                bgm.play().catch(error => {
-                    console.warn("BGM play failed due to autoplay policy or other error:", error);
-                });
+                // BGM 재생 시도. 실패 시 Context 잠금이 풀리지 않았다고 판단하고 hasInteracted를 초기화
+                const playPromise = bgm.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn("BGM play failed, resetting audio flag:", error);
+                        // BGM 재생 실패 시 (Context가 잠겨있을 가능성 높음) 플래그를 리셋하여 다음 탭에서 재시도하도록 유도
+                        hasInteracted = false; 
+                    });
+                }
             }
             
-            // Context 재활성화 시도 로직 제거 (최초 1회만 시도하는 원본 패턴 유지)
-
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
@@ -646,8 +645,6 @@
                     if (startScreenState === 'leaderboard') { isDragging = true; lastTouchY = pos.y; if (isInside(pos, uiBoxes.confirmBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'main'; leaderboardScrollY = 0; } }
                 }
             } else if (gameState === 'playing') {
-                // 게임 화면 탭 시 Context 재활성화 시도 로직 제거
-                
                 if (isInside(pos, pauseButtonBox)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'paused'; bgm.pause(); }
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
@@ -700,7 +697,6 @@
                 gameLoop(0);
                 return;
             }
-            // [제거] main 함수에서 Context 활성화 시도 제거 (hasInteracted에서만 처리)
 
             initializeFirebase();
             setRealViewportHeight();
