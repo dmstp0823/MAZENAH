@@ -94,7 +94,6 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
-        // hasInteracted는 오직 BGM 재생 여부를 결정하며, Context 활성화의 핵심 게이트입니다.
         let hasInteracted = false, isMuted = false;
         let finalRank = null;
         
@@ -111,7 +110,6 @@
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
         
-        // 순위표 쿼리 제한을 30으로 유지
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(30).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
@@ -156,9 +154,18 @@
             const soundPromises = soundSrcs.map(src => loadAsset('sound', null, src));
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
+
+        // [추가] Context 재개 전담 함수 (논블로킹)
+        function resumeAudioContext() {
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                audioContext.resume().catch(e => console.error("Context resume failed:", e));
+            }
+        }
         
         function playSound(src, volume = 1.0) {
-            // hasInteracted가 false이거나, 음소거, 또는 sfxPool에 없으면 재생 시도하지 않음
+            // [보강] playSound 호출 직전에도 Context 재개를 시도하여 안전성을 높임
+            resumeAudioContext(); 
+            
             if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
             
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
@@ -628,6 +635,9 @@
                 }
             }
             
+            // [추가] 모든 탭에서 Context 재개 시도 (Context가 잠기는 것을 방지)
+            resumeAudioContext(); 
+
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
