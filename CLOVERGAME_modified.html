@@ -607,7 +607,7 @@
                 ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); 
             });
 
-            // [복구] 배경음 재생 안내 문구 (깜빡임 & 영구 삭제)
+            // [수정] 배경음 재생 안내 문구 위치 조정
             if (!hasPlayedOnce) {
                 // blinkTimer를 사용하여 0.2 ~ 1.0 사이의 불투명도를 계산합니다.
                 const blinkPhase = Math.abs(Math.sin(blinkTimer * Math.PI)); 
@@ -615,9 +615,8 @@
                 ctx.font = '18px "MyGameFont"';
                 ctx.textAlign = 'center';
                 
-                // 위치 조정: 게임 시작 버튼 그룹과 Credit 버튼 사이에 배치
-                // buttonStartY + (btnHeight * 3) + (gap * 2) + 15 (이전 위치보다 약간 아래로 조정)
-                const blinkTextY = buttonStartY + (btnHeight * 3) + (gap * 2) + 15;
+                // 위치 조정: Y좌표를 15px 더 내림 (이전 15 -> 현재 30)
+                const blinkTextY = buttonStartY + (btnHeight * 3) + (gap * 2) + 30;
                 ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, blinkTextY);
             }
 
@@ -827,7 +826,7 @@
             }
         }
 
-        // [수정] 배경음 재생 안정성 강화를 위해 setTimeout을 사용, forcePlay 플래그 추가
+        // [수정] 배경음 재생 안정성 강화를 위해 AudioContext 활성화 로직을 최적화
         function initAudioContext(forcePlay = false) {
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -864,9 +863,31 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정] 최초 터치 시 hasInteracted 플래그 설정 및 AudioContext 활성화만 시도 (메뉴 BGM 재생은 이 안에서 이루어짐)
+            // [최적화] 최초 터치 시 AudioContext 활성화 시도를 터치 이벤트의 동기적 부분에서 실행
             if (!hasInteracted) {
-                initAudioContext(); 
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // AudioContext.resume()은 사용자 상호작용 내에서 호출되어야 가장 성공률이 높습니다.
+                if (audioContext.state === 'suspended' || audioContext.state === 'closed') {
+                    audioContext.resume().then(() => {
+                        console.log('AudioContext resumed successfully on first interaction.');
+                        hasInteracted = true;
+                        if (!isMuted) {
+                             bgm.volume = BGM_VOLUME_MENU;
+                             bgm.play().catch(e => console.log("Menu BGM play failed after resume:", e));
+                        }
+                    }).catch(e => {
+                        console.error("AudioContext resume failed:", e);
+                    });
+                } else {
+                    hasInteracted = true; // 이미 running 상태인 경우 상호작용 플래그만 설정
+                    if (!isMuted && bgm.paused) {
+                        bgm.volume = BGM_VOLUME_MENU;
+                        bgm.play().catch(e => console.log("Menu BGM play failed in running state:", e));
+                    }
+                }
             }
             
             // 게임 오버 상태가 아닐 때는 네이티브 Input 포커스 해제
