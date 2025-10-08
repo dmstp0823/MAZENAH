@@ -605,21 +605,21 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [핵심 수정] Context 활성화 실패 시 hasInteracted를 false로 되돌려 다음 탭에서 재시도하도록 함
+            // [핵심] Context 활성화 게이트 로직 (BGM/SFX 활성화 시도)
             if (!hasInteracted) {
                 hasInteracted = true; 
                 
-                // Context가 suspended 상태일 때 resume 시도
+                // Context resume 시도
                 if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
                     audioContext.resume().catch(e => console.error("Context resume failed on first tap:", e));
                 }
                 
-                // BGM 재생 시도. 실패 시 Context 잠금이 풀리지 않았다고 판단하고 hasInteracted를 초기화
+                // BGM play 시도. 실패 시 Context 잠금이 풀리지 않았다고 판단하고 hasInteracted를 초기화
                 const playPromise = bgm.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
                         console.warn("BGM play failed, resetting audio flag:", error);
-                        // [핵심] BGM 재생 실패 시 (Context가 잠겨있을 가능성 높음) 플래그를 리셋하여 다음 탭에서 재시도하도록 유도
+                        // BGM 재생 실패 시 (Context가 잠겨있을 가능성 높음) 플래그를 리셋하여 다음 탭에서 재시도하도록 유도
                         hasInteracted = false; 
                     });
                 }
