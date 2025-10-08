@@ -58,7 +58,7 @@
             projectId: "clovergame-e712f",
             storageBucket: "clovergame-e712f.appspot.com",
             messagingSenderId: "525191060039",
-            appId: "1:525191060039:web:5707417e6e8ee8bf9cef62"
+            appId: "1:5251910600039:web:5707417e6e8ee8bf9cef62"
         };
         
         const characters = [
@@ -155,17 +155,11 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
 
-        // [추가] Context 재개 전담 함수 (논블로킹)
-        function resumeAudioContext() {
-            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                audioContext.resume().catch(e => console.error("Context resume failed:", e));
-            }
-        }
+        // [제거] 불필요한 Context 재개 유틸리티 함수 제거
+        // resumeAudioContext 함수 제거
         
         function playSound(src, volume = 1.0) {
-            // [보강] playSound 호출 직전에도 Context 재개를 시도하여 안전성을 높임
-            resumeAudioContext(); 
-            
+            // [복구] Context 재개 로직 제거 (hasInteracted에서만 Context 활성화 제어)
             if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
             
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
@@ -189,11 +183,8 @@
             source.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            // 재생이 끝나면 노드 연결을 명시적으로 해제하여 메모리 정리
-            source.onended = () => {
-                source.disconnect();
-                gainNode.disconnect();
-            };
+            // [핵심 복구] 재생 후 노드 명시적 정리 로직 제거
+            // Web Audio Context가 스스로 노드를 정리하도록 맡김 (정상 작동 원본 코드와 동일)
 
             source.start(0);
         }
@@ -227,7 +218,6 @@
             bgm.volume = BGM_VOLUME_NORMAL;
             
             if (hasInteracted && bgm.paused) {
-                // hasInteracted가 true면 Context는 활성화되었다고 가정하고 BGM 재생만 시도
                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
             }
         }
@@ -629,14 +619,13 @@
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
                         console.warn("BGM play failed, resetting audio flag:", error);
-                        // BGM 재생 실패 시 (Context가 잠겨있을 가능성 높음) 플래그를 리셋하여 다음 탭에서 재시도하도록 유도
+                        // [핵심] BGM 재생 실패 시 (Context가 잠겨있을 가능성 높음) 플래그를 리셋하여 다음 탭에서 재시도하도록 유도
                         hasInteracted = false; 
                     });
                 }
             }
             
-            // [추가] 모든 탭에서 Context 재개 시도 (Context가 잠기는 것을 방지)
-            resumeAudioContext(); 
+            // [제거] 모든 탭에서 Context 재개 시도 (Context 재개는 최초 탭에서만 시도)
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
@@ -664,7 +653,6 @@
                 if (finalRank === null) {
                     const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
                     if (nickname && nickname.trim() !== '') {
-                        // saveAndGetRank는 비동기 함수이므로 그대로 둡니다.
                         saveAndGetRank(score, nickname.trim());
                     } else {
                         gameState = 'startScreen'; startScreenState = 'main'; finalRank = null;
