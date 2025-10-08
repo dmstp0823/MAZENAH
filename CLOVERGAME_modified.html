@@ -70,6 +70,8 @@
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
             darkGrayBtn: './darkgray.png', lightGrayBtn: './lightgray.png', major: './major.png',
             yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
+            soundOn: './sound_on.png', 
+            soundOff: './sound_off.png', 
             ground: './ground.png'
         };
         
@@ -98,12 +100,13 @@
         
         const loadedImages = {};
         
-        // [오디오 복구] Web Audio API 변수 선언
+        // [오디오 복구] Web Audio API 변수 선언 및 플래그 복구
         let sfxPool = {}; 
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
         let audioContext; 
-        let hasInteracted = false; // 오디오 활성화 게이트 플래그 복구
+        let hasInteracted = false; 
+        let isMuted = false; 
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -112,7 +115,7 @@
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
         
-        // [기능 추가] 순위표 30위까지 로딩
+        // [기능 유지] 순위표 30위까지 로딩
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(30).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
         
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
@@ -124,7 +127,7 @@
                     const img = new Image();
                     img.src = src;
                     img.onload = () => {
-                        if (name === 'character') resolve(img);
+                        if (name === 'character' || name === 'soundOn' || name === 'soundOff') resolve(img);
                         else { loadedImages[name] = img; resolve(); }
                     };
                     img.onerror = () => reject(`${type} 로드 실패: ${src}`);
@@ -161,15 +164,27 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
         
-        // [오디오 복구] playSound 함수 복구 (Node 정리 로직 없음)
+        // [오디오 복구] Web Audio Context 활성화 유틸리티 (await 제거하여 논블로킹 시도 유지)
+        async function unlockAudioContext() {
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
+                return audioContext.resume().then(() => true).catch(e => {
+                    console.error("AudioContext resume failed:", e);
+                    return false;
+                });
+            }
+            return true;
+        }
+
+        // [오디오 복구] playSound 함수 복구
         function playSound(src, volume = 1.0) {
-            if (!audioContext || !hasInteracted || !sfxPool[src]) return;
-            
-            // 모바일 크롬에서 Context가 잠길 경우, 버튼 클릭 효과음이 나오도록 방어 로직 추가
-            if (audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
-                audioContext.resume().catch(e => console.error("Context resume failed in playSound:", e));
+            // [복구] Context가 잠겨있다면 재생 전 resume 시도 (논블로킹)
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                unlockAudioContext(); 
             }
 
+            if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
+            
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
             sfxPlayedThisFrame++;
 
@@ -180,18 +195,20 @@
             }
             sfxLastPlayed[src] = now;
 
-            const source = audioContext.createBufferSource();
-            source.buffer = sfxPool[src];
+            try {
+                const source = audioContext.createBufferSource();
+                source.buffer = sfxPool[src];
 
-            const gainNode = audioContext.createGain();
-            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                const gainNode = audioContext.createGain();
+                gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
 
-            source.connect(gainNode);
-            gainNode.connect(audioContext.destination);
+                source.connect(gainNode);
+                gainNode.connect(audioContext.destination);
 
-            source.start(0);
-            
-            // Note: Node 정리 로직 (disconnect)은 모바일 크롬 버그 유발 가능성이 높아 제거했습니다.
+                source.start(0);
+            } catch (e) {
+                console.error("SFX playback failed:", e);
+            }
         }
 
         // --- 게임 로직 ---
@@ -221,8 +238,11 @@
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            // BGM 재생 시도 로직은 유지 (Web Audio API가 아닌 HTML Audio이므로)
-            bgm.play().catch(e => console.log("BGM play failed after init:", e));
+            
+            // BGM 재생 (재시도 플래그는 handleInteractionStart에서 관리)
+            if (!isMuted) { 
+                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
+            }
         }
 
         function spawnObject() {
@@ -298,7 +318,7 @@
         }
         
         // --- 렌더링 ---
-        // [기능 추가] 피격 시 깜빡임 애니메이션 (drawPlayer)
+        // [기능 유지] 피격 시 깜빡임 애니메이션 (drawPlayer)
         function drawPlayer() { 
             let imgToDraw = player.originalImg;
             
@@ -309,10 +329,9 @@
                 ctx.save();
                 
                 if (isVisible) {
-                    // 피격 이미지 (char1-3, 2-3, 3-3) 사용
                     imgToDraw = player.imgHit || player.originalImg; 
                 } else {
-                    imgToDraw = null; // 안 보이는 프레임에는 이미지를 그리지 않음 (깜빡임)
+                    imgToDraw = null; 
                 }
             }
             
@@ -329,6 +348,14 @@
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
         
+        // [복구] 음소거 버튼 그리기 로직 복구
+        function drawMuteButton() { 
+            const muteBtnSize = 60, muteBtnMargin = 20, muteBtnX = muteBtnMargin, muteBtnY = GAME_HEIGHT - muteBtnSize - muteBtnMargin; 
+            uiBoxes.muteBtn = { x: muteBtnX, y: muteBtnY, width: muteBtnSize, height: muteBtnSize }; 
+            let imgToDraw = isMuted ? loadedImages.soundOff : loadedImages.soundOn; 
+            if (imgToDraw) ctx.drawImage(imgToDraw, muteBtnX, muteBtnY, muteBtnSize, muteBtnSize); 
+        }
+
         function drawCreditScreen() {
             ctx.fillStyle = '#2c3e50';
             ctx.textAlign = 'center';
@@ -358,7 +385,7 @@
             drawConfirmButton(GAME_HEIGHT * 0.9);
         }
 
-        // [기능 추가] 순위표 30위까지 표시 (silver box 포함)
+        // [기능 유지] 순위표 30위까지 표시 (silver box 포함)
         function drawLeaderboardScreen() {
             let listStartY = GAME_HEIGHT * 0.15; 
             const majorImg = loadedImages.major;
@@ -390,7 +417,7 @@
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     let boxImg;
                     if (index < 3) { boxImg = loadedImages.yellow; }
-                    else if (index < 10) { boxImg = loadedImages.silver; } 
+                    else if (index < 30) { boxImg = loadedImages.silver; } // 30위까지 silver 박스 사용
                     else { boxImg = loadedImages.gray; }
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
@@ -496,7 +523,7 @@
             const creditBtnX = GAME_WIDTH - creditBtnSize - creditBtnMargin, creditBtnY = GAME_HEIGHT - creditBtnSize - creditBtnMargin;
             uiBoxes.creditBtn = { x: creditBtnX, y: creditBtnY, width: creditBtnSize, height: creditBtnSize };
             if (loadedImages.circleBtn) ctx.drawImage(loadedImages.circleBtn, creditBtnX, creditBtnY, creditBtnSize, creditBtnSize);
-            ctx.fillStyle = 'black'; ctx.font = `bold ${creditBtnSize * 0.25}px "MyGameFont"`;
+            ctx.fillStyle = 'black'; ctx.font = `bold ${creditBtnSize * 0.25}px "MyGameFont"';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('Credit', creditBtnX + creditBtnSize / 2, creditBtnY + creditBtnSize / 2);
             ctx.textBaseline = 'alphabetic';
@@ -580,10 +607,10 @@
             switch(gameState) {
                 case 'loading': ctx.fillStyle = 'black'; ctx.font = '24px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, GAME_HEIGHT / 2); break;
                 case 'error': drawErrorScreen(); break;
-                case 'startScreen': drawStartScreen(); break;
-                case 'playing': drawObjects(); drawPlayer(); drawGround(); drawUI(); break;
-                case 'paused': drawObjects(); drawPlayer(); drawGround(); drawUI(false); drawPauseScreen(); break;
-                case 'gameOver': drawObjects(); drawPlayer(); drawGround(); drawGameOver(); break;
+                case 'startScreen': drawStartScreen(); drawMuteButton(); break; 
+                case 'playing': drawObjects(); drawPlayer(); drawGround(); drawUI(); drawMuteButton(); break; 
+                case 'paused': drawObjects(); drawPlayer(); drawGround(); drawUI(false); drawPauseScreen(); drawMuteButton(); break; 
+                case 'gameOver': drawObjects(); drawPlayer(); drawGround(); drawGameOver(); drawMuteButton(); break; 
             }
         }
         
@@ -593,7 +620,7 @@
         function setRealViewportHeight() { document.body.style.height = `${window.innerHeight}px`; }
         function resizeCanvas() { const vpWidth = window.innerWidth, vpHeight = window.innerHeight; const scale = Math.min(vpWidth / GAME_WIDTH, vpHeight / GAME_HEIGHT); canvas.style.width = `${GAME_WIDTH * scale}px`; canvas.style.height = `${GAME_HEIGHT * scale}px`; const dpr = window.devicePixelRatio || 1; canvas.width = GAME_WIDTH * dpr; canvas.height = GAME_HEIGHT * dpr; ctx.scale(dpr, dpr); drawCurrentState(); }
         
-        // [기능 추가] 순위 저장 및 랭크 계산 비동기 로직
+        // [기능 유지] 순위 저장 및 랭크 계산 비동기 로직
         async function saveAndGetRank(currentScore, nickname) {
             try {
                 finalRank = 'saving';
@@ -606,34 +633,61 @@
             }
         }
 
-        // [이벤트 처리] 오디오 활성화 로직 복구
-        function handleInteractionStart(e) {
+        // [오디오 보강] Web Audio Context 활성화 유틸리티
+        async function unlockAudioContext() {
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
+                return audioContext.resume().then(() => true).catch(e => {
+                    console.error("AudioContext resume failed:", e);
+                    return false;
+                });
+            }
+            return true;
+        }
+
+        // [이벤트 처리] 오디오 활성화 로직 복구 (가장 안정적인 패턴)
+        async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
             if (!hasInteracted) {
-                hasInteracted = true;
+                // [오디오 활성화] Context 활성화 (논블로킹 시도)
+                unlockAudioContext(); 
                 
-                // Web Audio Context 활성화 시도
-                if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                    audioContext.resume().catch(e => console.error("Context resume failed on first tap:", e));
-                }
-
-                // BGM play 시도 및 실패 시 hasInteracted 리셋 (재시도 게이트)
+                // BGM play 시도 (HTML Audio)
                 const playPromise = bgm.play();
+                
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
+                        // BGM 재생 실패 시 (정책 차단), hasInteracted를 리셋하여 다음 탭에 재시도하도록 게이트를 엽니다.
                         hasInteracted = false; 
                     });
+                } else {
+                    // Promise가 없으면 (일반적인 동기적 재생) hasInteracted 플래그를 true로 설정합니다.
+                    hasInteracted = true;
                 }
             }
             
-            if (gameState === 'startScreen') {
-                // [방어 로직] Context가 잠겼을 때 버튼 효과음이 나오도록 재시도
-                if (audioContext && audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
-                    audioContext.resume().catch(e => console.error("Context resume failed on button click:", e));
+            // [복구] 음소거 버튼 클릭 로직
+            if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { 
+                isMuted = !isMuted; 
+                bgm.muted = isMuted; 
+                if (isMuted) {
+                    bgm.pause();
+                } else {
+                    bgm.play().catch(e => console.log("BGM play failed on unmute:", e));
                 }
-                
+                drawCurrentState(); 
+                return; 
+            }
+
+            // Context가 잠겨있을 경우, UI 로직 실행 직전에 Context를 깨우는 시도를 다시 합니다.
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                unlockAudioContext().catch(e => console.error("Context resume failed on button click:", e));
+            }
+
+
+            if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
                     if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'characterSelect'; }
                     else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(SOUND_ASSETS.buttonClick); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
@@ -654,7 +708,7 @@
             } else if (gameState === 'paused') {
                 if (isInside(pos, uiBoxes.resumeBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play().catch(e => console.log("BGM play failed on resume:", e)); }
                 else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play().catch(e => console.log("BGM play failed on return to main:", e)); }
-            // [기능 추가] Game Over 비동기 랭킹 처리 로직
+            // [기능 유지] Game Over 비동기 랭킹 처리 로직
             } else if (gameState === 'gameOver') {
                 if (finalRank === null) {
                     const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
@@ -707,7 +761,8 @@
             bgm.volume = BGM_VOLUME_MENU;
             resizeCanvas(); 
             try {
-                await loadGameAssets();
+                // [복구] soundOn/Off 이미지 로딩을 위해 loadGameAssets가 완료될 때까지 대기
+                await loadGameAssets(); 
                 listenForLeaderboardUpdates();
                 gameState = 'startScreen';
             } catch (error) {
@@ -715,19 +770,20 @@
                 loadingError = error;
                 gameState = 'error';
             }
-            gameLoop(0); // 에러가 없으면 로드 완료 후 화면 갱신
+            gameLoop(0); // 로드 완료 후 화면 갱신
         }
         
         window.addEventListener('resize', () => { setRealViewportHeight(); resizeCanvas(); });
         document.addEventListener('visibilitychange', () => { 
             if (document.hidden) { 
                 if (gameState === 'playing' || gameState === 'paused') bgm.pause();
-                // if (audioContext) audioContext.suspend(); // Context 정지 로직은 모바일 크롬에서 불안정하여 제거
             } else {
-                if (gameState === 'playing') {
-                    bgm.play().catch(e => console.log("BGM play failed on visibility change:", e));
+                if (gameState === 'playing' || gameState === 'paused') { // 일시정지 상태에서도 BGM 재시도
+                    if (!isMuted) {
+                        bgm.play().catch(e => console.log("BGM play failed on visibility change:", e));
+                    }
                     if (audioContext && audioContext.state === 'suspended') {
-                         audioContext.resume().catch(e => console.error("Context resume failed on visibility change:", e));
+                         unlockAudioContext().catch(e => console.error("Context resume failed on visibility change:", e));
                     }
                 }
             }
