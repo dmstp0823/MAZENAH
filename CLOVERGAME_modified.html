@@ -110,7 +110,7 @@
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
         function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(20).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
-        async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류: ", error); } }
+        async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
         async function loadAsset(type, name, src) {
             if (type === 'image') {
@@ -187,7 +187,11 @@
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            if (!bgm.paused) bgm.play();
+            // bgm.play()는 init()에서 호출하지 않고, handleInteractionStart()에서 최초 1회만 시도합니다.
+            // 이미 hasInteracted = true 이고 bgm.paused == true 라면 재생 시도.
+            if (hasInteracted && bgm.paused) {
+                bgm.play().catch(e => console.log("BGM play failed after init:", e));
+            }
         }
 
         function spawnObject() {
@@ -541,18 +545,25 @@
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
+
+            // [수정된 부분: hasInteracted 플래그를 먼저 설정]
             if (!hasInteracted) {
                 hasInteracted = true;
-                try {
-                    if (audioContext && audioContext.state === 'suspended') {
-                        await audioContext.resume();
-                    }
-                    await bgm.play();
-                } catch (error) {
-                    console.error("오디오 활성화 실패:", error);
-                    hasInteracted = false; 
+                // Web Audio Context 활성화 시도
+                if (audioContext && audioContext.state === 'suspended') {
+                    // await audioContext.resume()는 try/catch 외부에서 수행
+                    audioContext.resume().catch(error => console.error("AudioContext resume failed:", error));
                 }
+                
+                // HTML Audio 요소 재생 시도. 실패해도 hasInteracted는 true로 유지.
+                bgm.play().catch(error => {
+                    console.warn("BGM play failed due to autoplay policy or other error:", error);
+                    // 실패하더라도 hasInteracted는 true를 유지하여 다음 클릭이 정상적으로 처리되게 함.
+                });
+                // Note: hasInteracted가 true가 되었으므로 다음 클릭부터는 이 블록을 건너뛰고 
+                // 다른 UI 상호작용 또는 게임 로직이 실행됩니다.
             }
+
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
@@ -573,8 +584,8 @@
                 if (isInside(pos, pauseButtonBox)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'paused'; bgm.pause(); }
                 else { player.dx = 0; targetX = pos.x - player.width / 2; }
             } else if (gameState === 'paused') {
-                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play(); }
-                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play(); }
+                if (isInside(pos, uiBoxes.resumeBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'playing'; bgm.volume = BGM_VOLUME_NORMAL; bgm.play().catch(e => console.log("BGM play failed on resume:", e)); }
+                else if (isInside(pos, uiBoxes.toMainBtn)) { playSound(SOUND_ASSETS.buttonClick); gameState = 'startScreen'; startScreenState = 'main'; bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play().catch(e => console.log("BGM play failed on return to main:", e)); }
             } else if (gameState === 'gameOver') {
                 if (finalRank === null) {
                     const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
@@ -582,11 +593,11 @@
                         saveAndGetRank(score, nickname.trim());
                     } else {
                         gameState = 'startScreen'; startScreenState = 'main'; finalRank = null;
-                        bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play();
+                        bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play().catch(e => console.log("BGM play failed on game over exit:", e));
                     }
                 } else if (finalRank !== 'saving') {
                     gameState = 'startScreen'; startScreenState = 'main'; finalRank = null;
-                    bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play();
+                    bgm.volume = BGM_VOLUME_MENU; bgm.currentTime = 0; bgm.play().catch(e => console.log("BGM play failed on game over exit:", e));
                 }
             }
         }
@@ -653,4 +664,3 @@
     </script>
 </body>
 </html>
-
