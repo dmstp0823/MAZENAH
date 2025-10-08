@@ -72,7 +72,7 @@
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
             darkGrayBtn: './darkgray.png', lightGrayBtn: './lightgray.png', major: './major.png',
-            yellow: './yellow.png', gray: './gray.png', circleBtn: './circle.png',
+            yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
             soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
         };
         const SOUND_ASSETS = {
@@ -97,14 +97,13 @@
         let lives;
         let animationFrameId;
         let hasInteracted = false, isMuted = false;
-        let finalRank = null; // 순위 저장 기능 추가를 위한 변수
+        let finalRank = null; 
         
         const loadedImages = {};
-        // [수정] Web Audio API 관련 변수 제거 및 HTML Audio 관련 변수만 남김
-        let sfxPool = {}; // HTML Audio 객체를 저장합니다. (Web Audio Buffer 대신)
+        let sfxPool = {}; // HTML Audio 객체를 저장합니다. 
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
-        // let audioContext; // Web Audio Context 제거
+        // audioContext 변수는 HTML Audio로 전환하면서 제거되었습니다.
 
         // ==================================================================
         // 함수 정의 (Function Definitions)
@@ -160,8 +159,8 @@
 
         // [수정] playSound: HTML Audio의 cloneNode를 사용하여 동시 재생을 구현합니다.
         function playSound(src, volume = 1.0) {
-            // [Web Audio API 관련 로직 제거: audioContext, hasInteracted 검사 제거]
-            if (isMuted || !sfxPool[src]) return;
+            // [Web Audio API 관련 로직 제거: audioContext 검사 제거]
+            if (isMuted || !sfxPool[src] || !hasInteracted) return; // hasInteracted 체크를 유지합니다.
 
             // 쿨다운 로직은 유지
             if (src === SOUND_ASSETS.clover) {
@@ -177,11 +176,14 @@
                 const clone = originalAudio.cloneNode(true);
                 clone.volume = volume;
 
-                // 재생이 완료되면 복제된 요소를 DOM에서 제거 (선택적, 메모리 관리)
                 clone.onended = () => clone.remove();
 
+                // **[SFX Fix]** 비(非) 사용자 입력 이벤트(충돌)에서 재생을 강제하기 위한 트릭
+                clone.pause();
+                clone.currentTime = 0;
+
                 // 모바일 환경에서 재생이 거부될 수 있으므로 Promise를 무시합니다.
-                clone.play().catch(e => console.warn("SFX playback failed on HTML Audio:", e));
+                clone.play().catch(e => console.warn(`SFX playback (${src}) failed on HTML Audio:`, e));
             } catch (e) {
                 console.error("SFX playback failed:", e);
             }
@@ -595,11 +597,7 @@
             if (!hasInteracted) {
                 hasInteracted = true;
                 
-                // 1. Context resume 시도
-                if (audioContext && audioContext.state === 'suspended') {
-                    // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
-                    audioContext.resume().catch(e => console.error("Context resume failed:", e));
-                }
+                // 1. Web Audio Context 관련 코드 제거됨 (ReferenceError 수정)
                 
                 // 2. BGM play 시도 (HTML Audio)
                 const playPromise = bgm.play();
@@ -685,12 +683,8 @@
         }
 
         async function main() {
-            try {
-                // [Web Audio API 제거]
-                // audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            } catch (e) {
-                // [Web Audio API 제거]
-            }
+            // [Web Audio API 제거]
+            // audioContext 생성 코드 제거됨
 
             initializeFirebase();
             setRealViewportHeight();
