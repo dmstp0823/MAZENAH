@@ -42,14 +42,14 @@
         const GAME_WIDTH = 540;
         const GAME_HEIGHT = 960;
         const MAX_LIVES = 3;
-        const BGM_VOLUME_NORMAL = 0.5; // BGM 볼륨 상수를 남겨둡니다.
-        const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2; // BGM 볼륨 상수를 남겨둡니다.
+        const BGM_VOLUME_NORMAL = 0.5;
+        const BGM_VOLUME_MENU = BGM_VOLUME_NORMAL / 2;
         const FEVER_DURATION = 5000;
         const FEVER_TRIGGER_COUNT = 10;
         const BASE_SPAWN_INTERVAL = 450;
         const FEVER_SPAWN_INTERVAL = 120;
         const OBJECT_POOL_SIZE = 100;
-        const MAX_SFX_PER_FRAME = 3; // 효과음 씹힘 방지 쿨다운용
+        const MAX_SFX_PER_FRAME = 3; 
 
         const FIREBASE_CONFIG = {
             apiKey: "새로 발급받은 키 문자열",
@@ -100,7 +100,7 @@
         
         const loadedImages = {};
         
-        // [오디오 복구] Web Audio API 변수 선언 및 플래그 복구
+        // [오디오 복구 기반] Web Audio API 변수 선언 및 플래그
         let sfxPool = {}; 
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
@@ -120,7 +120,7 @@
         
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
-        // [오디오 복구] loadAsset 함수에 Sound 로직 복구
+        // [오디오 복구 기반] loadAsset 함수에 Sound 로직 복구
         async function loadAsset(type, name, src) {
             if (type === 'image') {
                 return new Promise((resolve, reject) => {
@@ -164,21 +164,20 @@
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
         
-        // [오디오 보강] Web Audio Context 활성화 유틸리티
-        async function unlockAudioContext() {
+        // [오디오 복구 기반] Web Audio Context 활성화 유틸리티 (논블로킹)
+        function unlockAudioContext() {
             if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
-                // await 없이 resume()만 시도하여 UI 스레드를 막지 않습니다.
                 return audioContext.resume().then(() => true).catch(e => {
                     console.error("AudioContext resume failed:", e);
                     return false;
                 });
             }
-            return true;
+            return Promise.resolve(true); 
         }
 
-        // [오디오 복구] playSound 함수 복구
+        // [오디오 복구 기반] playSound 함수 복구
         function playSound(src, volume = 1.0) {
-            // [복구] Context가 잠겨있다면 재생 전 resume 시도 (논블로킹)
+            // Context가 잠겨있다면 재생 전 resume 시도 (논블로킹)
             if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
                 unlockAudioContext(); 
             }
