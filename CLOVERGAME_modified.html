@@ -154,12 +154,13 @@
             const soundPromises = soundSrcs.map(src => loadAsset('sound', null, src));
             await Promise.all([...imagePromises, ...charImagePromises, ...soundPromises, document.fonts.ready]);
         }
-
-        // [제거] 불필요한 Context 재개 유틸리티 함수 제거
-        // resumeAudioContext 함수 제거
         
         function playSound(src, volume = 1.0) {
-            // [복구] Context 재개 로직 제거 (hasInteracted에서만 Context 활성화 제어)
+            // [보강] Context가 잠겨있으면, playSound 호출 직전에 비동기적으로 Context를 재개 시도
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                audioContext.resume().catch(e => console.error("SFX Context resume failed:", e));
+            }
+            
             if (!audioContext || !hasInteracted || isMuted || !sfxPool[src]) return; 
             
             if (sfxPlayedThisFrame >= MAX_SFX_PER_FRAME) return;
@@ -183,8 +184,7 @@
             source.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            // [핵심 복구] 재생 후 노드 명시적 정리 로직 제거
-            // Web Audio Context가 스스로 노드를 정리하도록 맡김 (정상 작동 원본 코드와 동일)
+            // 재생 후 노드 정리 로직은 제거하여 안정성 확보 (Context가 스스로 정리하도록 맡김)
 
             source.start(0);
         }
@@ -625,7 +625,11 @@
                 }
             }
             
-            // [제거] 모든 탭에서 Context 재개 시도 (Context 재개는 최초 탭에서만 시도)
+            // [추가] 모든 탭/클릭 시 Context 재개 시도 (Context가 잠기는 것을 방지하는 최종 안전장치)
+            if (audioContext && (audioContext.state === 'suspended' || audioContext.state === 'interrupted')) {
+                 audioContext.resume().catch(e => console.error("Secondary Context resume failed:", e));
+            }
+
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
