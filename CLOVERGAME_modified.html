@@ -328,13 +328,9 @@
                 cachedLeaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     let boxImg;
-                    if (index < 3) {
-                        boxImg = loadedImages.yellow; // 1, 2, 3위
-                    } else if (index < 10) {
-                        boxImg = loadedImages.silver; // 4 ~ 10위
-                    } else {
-                        boxImg = loadedImages.gray; // 11 ~ 20위
-                    }
+                    if (index < 3) { boxImg = loadedImages.yellow; }
+                    else if (index < 10) { boxImg = loadedImages.silver; }
+                    else { boxImg = loadedImages.gray; }
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
                     const character = characters.find(c => c.name === entry.character);
