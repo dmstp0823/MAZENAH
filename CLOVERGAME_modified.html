@@ -164,9 +164,8 @@
             }
             sfxLastPlayed[src] = now;
             
-            // Web Audio Context 상태가 suspended면 재개 시도 (모든 효과음 재생 시)
+            // Web Audio Context 상태가 suspended면 비동기적으로 재개 시도
             if (audioContext.state === 'suspended') {
-                // 비동기적으로 Context 활성화 시도. (성공하면 다음 턴에 효과음이 들림)
                 audioContext.resume().catch(e => console.error("AudioContext resume failed in playSound:", e));
             }
             
@@ -290,7 +289,7 @@
         }
         
         // --- 렌더링 ---
-        function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.hitImg : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
+        function drawPlayer() { const currentImg = (player.hitTimer > 0) ? player.imgHit : player.originalImg; if (currentImg) ctx.drawImage(currentImg, player.x, player.y, player.width, player.height); }
         function drawObjects() { objectPool.forEach(obj => { if (!obj.active) return; let imgToDraw; if (obj.type === 'good') imgToDraw = loadedImages.clover; else if (obj.type === 'special') imgToDraw = loadedImages.love; else if (obj.type === 'bad') imgToDraw = loadedImages.bomb; if (imgToDraw) ctx.drawImage(imgToDraw, obj.x, obj.y, obj.width, obj.height); }); }
         function drawConfirmButton(yPos) { const btnWidth = 150, btnHeight = 50, btnX = (GAME_WIDTH - btnWidth) / 2; uiBoxes.confirmBtn = { x: btnX, y: yPos, width: btnWidth, height: btnHeight }; ctx.drawImage(loadedImages.darkGrayBtn, btnX, yPos, btnWidth, btnHeight); ctx.fillStyle = 'white'; ctx.font = 'bold 20px "MyGameFont"'; ctx.textAlign = 'center'; ctx.fillText('확인', GAME_WIDTH / 2, yPos + 32); }
         function drawGround() { const ground = loadedImages.ground; if (ground) { const imgHeight = (ground.naturalHeight / ground.naturalWidth) * GAME_WIDTH; const visiblePortion = 0.85; ctx.drawImage(ground, 0, GAME_HEIGHT - (imgHeight * visiblePortion), GAME_WIDTH, imgHeight); } }
@@ -565,25 +564,24 @@
             }
         }
 
-        // [수정] Context resume을 await 가능한 비동기 함수로 변경
-        async function resumeAudioContext() {
+        // [수정] Context resume을 await 가능한 비동기 함수로 변경 -> 다시 동기 실행으로 변경 (await 제거)
+        function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
-                try {
-                    await audioContext.resume();
-                } catch (error) {
+                audioContext.resume().catch(error => {
                     console.error("AudioContext resume failed:", error);
-                }
+                });
             }
         }
 
-        async function handleInteractionStart(e) {
+        // [수정] async 제거, handleInteractionStart 함수 내부의 await 모두 제거
+        function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정] 최초 상호작용 시 Web Audio Context 활성화가 완료될 때까지 기다림
+            // 최초 상호작용 시 Web Audio Context 활성화 및 BGM 재생 (논블로킹)
             if (!hasInteracted) {
                 hasInteracted = true; 
-                await resumeAudioContext(); // await 추가
+                resumeAudioContext(); // await 제거
                 
                 // HTML Audio 요소 재생 시도.
                 bgm.play().catch(error => {
@@ -591,10 +589,9 @@
                 });
             }
             
-            // [수정] 모든 UI 상호작용 시작 시 Context 재활성화 시도 (사파리/모바일 안정성 확보)
-            // 메인 메뉴의 어떤 버튼을 누르든 효과음 활성화를 시도함
+            // 모든 UI 상호작용 시작 시 Context 재활성화 시도 (논블로킹)
             if (gameState === 'startScreen' || gameState === 'paused') {
-                await resumeAudioContext(); // await 추가
+                resumeAudioContext(); // await 제거
             }
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
@@ -623,6 +620,7 @@
                 if (finalRank === null) {
                     const nickname = prompt(`게임 오버!\n최종 점수: ${score}\n\n순위에 등록할 닉네임을 입력하세요:`, '');
                     if (nickname && nickname.trim() !== '') {
+                        // saveAndGetRank는 비동기 함수이므로 그대로 둡니다.
                         saveAndGetRank(score, nickname.trim());
                     } else {
                         gameState = 'startScreen'; startScreenState = 'main'; finalRank = null;
@@ -698,6 +696,7 @@
                 }
             }
         });
+        // handleInteractionStart가 이제 비동기 함수가 아니므로 async를 제거합니다.
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
         canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
         canvas.addEventListener('touchend', handleInteractionEnd);
