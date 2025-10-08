@@ -312,7 +312,8 @@
                     inactiveObj.speed = 200;
                     inactiveObj.type = 'good';
                 } else {
-                    const bombChance = Math.min(0.7, 0.3 + (score / 500) * 0.2);
+                    // [수정] 폭탄 생성 확률을 약간 낮췄습니다.
+                    const bombChance = Math.min(0.7, 0.28 + (score / 500) * 0.15);
                     const specialChance = 0.15;
                     const rand = Math.random();
                     if (rand < bombChance) inactiveObj.type = 'bad';
@@ -331,7 +332,8 @@
         
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; 
-            gameSpeedMultiplier = Math.min(4, 1 + (score * 0.01));
+            // [수정] 게임 최대 속도를 4에서 3으로 낮췄습니다.
+            gameSpeedMultiplier = Math.min(3, 1 + (score * 0.01));
             playerHitbox.x = player.x + player.width * 0.2;
             playerHitbox.y = player.y;
             playerHitbox.width = player.width * 0.6;
@@ -1123,3 +1125,4 @@
     </script>
 </body>
 </html>
+
