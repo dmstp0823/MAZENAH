@@ -415,7 +415,7 @@
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
-            const line5_part1 = "점수가 TOP 20 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
+            const line5_part1 = "점수가 TOP 30 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
             const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
@@ -541,20 +541,18 @@
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
-            
             if (!hasInteracted) {
                 hasInteracted = true;
                 try {
                     if (audioContext && audioContext.state === 'suspended') {
                         await audioContext.resume();
                     }
-                    bgm.play().catch(e => console.log("BGM play was interrupted."));
+                    await bgm.play();
                 } catch (error) {
                     console.error("오디오 활성화 실패:", error);
                     hasInteracted = false; 
                 }
             }
-
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
