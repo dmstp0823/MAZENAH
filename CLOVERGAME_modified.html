@@ -163,12 +163,25 @@
                 if (sfxLastPlayed[src] && now - sfxLastPlayed[src] < cooldown) { return; }
             }
             sfxLastPlayed[src] = now;
+            
+            // Web Audio Source 노드 생성
             const source = audioContext.createBufferSource();
             source.buffer = sfxPool[src];
+            
+            // Gain 노드 생성 및 볼륨 설정
             const gainNode = audioContext.createGain();
             gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+            
+            // 노드 연결: Source -> Gain -> Destination
             source.connect(gainNode);
             gainNode.connect(audioContext.destination);
+            
+            // 재생이 끝나면 노드 연결을 명시적으로 해제하여 메모리 정리
+            source.onended = () => {
+                source.disconnect();
+                gainNode.disconnect();
+            };
+
             source.start(0);
         }
 
@@ -187,8 +200,12 @@
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
             bgm.volume = BGM_VOLUME_NORMAL;
-            // bgm.play()는 init()에서 호출하지 않고, handleInteractionStart()에서 최초 1회만 시도합니다.
-            // 이미 hasInteracted = true 이고 bgm.paused == true 라면 재생 시도.
+            
+            // [추가 수정] 게임 시작 시 Web Audio Context 활성화를 재시도
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().catch(e => console.error("AudioContext resume failed on init:", e));
+            }
+
             if (hasInteracted && bgm.paused) {
                 bgm.play().catch(e => console.log("BGM play failed after init:", e));
             }
@@ -546,22 +563,18 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [수정된 부분: hasInteracted 플래그를 먼저 설정]
+            // Web Audio Context 활성화 및 BGM 재생 시도는 최초 1회만 시도합니다.
             if (!hasInteracted) {
-                hasInteracted = true;
+                hasInteracted = true; 
                 // Web Audio Context 활성화 시도
                 if (audioContext && audioContext.state === 'suspended') {
-                    // await audioContext.resume()는 try/catch 외부에서 수행
-                    audioContext.resume().catch(error => console.error("AudioContext resume failed:", error));
+                    audioContext.resume().catch(error => console.error("AudioContext resume failed on interaction:", error));
                 }
                 
-                // HTML Audio 요소 재생 시도. 실패해도 hasInteracted는 true로 유지.
+                // HTML Audio 요소 재생 시도. 실패해도 hasInteracted는 true를 유지.
                 bgm.play().catch(error => {
                     console.warn("BGM play failed due to autoplay policy or other error:", error);
-                    // 실패하더라도 hasInteracted는 true를 유지하여 다음 클릭이 정상적으로 처리되게 함.
                 });
-                // Note: hasInteracted가 true가 되었으므로 다음 클릭부터는 이 블록을 건너뛰고 
-                // 다른 UI 상호작용 또는 게임 로직이 실행됩니다.
             }
 
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
@@ -649,7 +662,22 @@
         }
         
         window.addEventListener('resize', () => { setRealViewportHeight(); resizeCanvas(); });
-        document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') { gameState = 'paused'; bgm.pause(); } });
+        // [수정] document.hidden 상태에서 audioContext 일시 중지 및 재개 로직 추가
+        document.addEventListener('visibilitychange', () => { 
+            if (document.hidden) { 
+                if (gameState === 'playing' || gameState === 'paused') bgm.pause();
+                if (audioContext && audioContext.state === 'running') {
+                    audioContext.suspend().catch(e => console.error("AudioContext suspend failed:", e));
+                }
+            } else {
+                if (gameState === 'playing' && !isMuted) {
+                    bgm.play().catch(e => console.log("BGM play failed on visibility change:", e));
+                }
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume().catch(e => console.error("AudioContext resume failed on visibility change:", e));
+                }
+            }
+        });
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
         canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
         canvas.addEventListener('touchend', handleInteractionEnd);
