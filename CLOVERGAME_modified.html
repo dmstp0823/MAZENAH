@@ -79,7 +79,7 @@
         };
         
         const characters = [
-            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 0.9, hitVolume: 1.0 },
+            { id: 1, name: 'PAIIEK', speed: 7, imgSrc: './char2.png', imgSrcSelected: './char2-1.png', imgIconSrc: './char2-2.png', imgHitSrc: './char2-3.png', selectSfxSrc: './sounds/char2-1.mp3', hitSfxSrc: './sounds/char2-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
             { id: 2, name: 'KANG', speed: 8, imgSrc: './char3.png', imgSrcSelected: './char3-1.png', imgIconSrc: './char3-2.png', imgHitSrc: './char3-3.png', selectSfxSrc: './sounds/char3-1.mp3', hitSfxSrc: './sounds/char3-1-1.mp3', selectVolume: 1.0, hitVolume: 1.0 },
             { id: 3, name: 'NAH', speed: 9, imgSrc: './char1.png', imgSrcSelected: './char1-1.png', imgIconSrc: './char1-2.png', imgHitSrc: './char1-3.png', selectSfxSrc: './sounds/char1-1.mp3', hitSfxSrc: './sounds/char1-1-1.mp3', selectVolume: 0.4, hitVolume: 1.0 }
         ];
@@ -607,7 +607,7 @@
                 ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); 
             });
 
-            // [수정] 배경음 재생 안내 문구 위치 조정
+            // [수정] 배경음 재생 안내 문구 위치 조정 (+30 -> +45)
             if (!hasPlayedOnce) {
                 // blinkTimer를 사용하여 0.2 ~ 1.0 사이의 불투명도를 계산합니다.
                 const blinkPhase = Math.abs(Math.sin(blinkTimer * Math.PI)); 
@@ -615,8 +615,8 @@
                 ctx.font = '18px "MyGameFont"';
                 ctx.textAlign = 'center';
                 
-                // 위치 조정: Y좌표를 15px 더 내림 (이전 15 -> 현재 30)
-                const blinkTextY = buttonStartY + (btnHeight * 3) + (gap * 2) + 30;
+                // 위치 조정: Y좌표를 15 더 내림 (30 -> 45)
+                const blinkTextY = buttonStartY + (btnHeight * 3) + (gap * 2) + 45;
                 ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, blinkTextY);
             }
 
