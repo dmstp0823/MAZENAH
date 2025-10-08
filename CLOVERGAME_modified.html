@@ -541,18 +541,20 @@
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
+            
             if (!hasInteracted) {
                 hasInteracted = true;
                 try {
                     if (audioContext && audioContext.state === 'suspended') {
                         await audioContext.resume();
                     }
-                    await bgm.play();
+                    bgm.play().catch(e => console.log("BGM play was interrupted."));
                 } catch (error) {
                     console.error("오디오 활성화 실패:", error);
                     hasInteracted = false; 
                 }
             }
+
             if (uiBoxes.muteBtn && isInside(pos, uiBoxes.muteBtn)) { isMuted = !isMuted; bgm.muted = isMuted; drawCurrentState(); return; }
             if (gameState === 'startScreen') {
                 if (startScreenState === 'main') {
