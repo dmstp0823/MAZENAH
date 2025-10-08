@@ -70,7 +70,7 @@
         const IMAGE_ASSETS = {
             clover: './clover.png', love: './love.png', bomb: './bomb.png', title: './clover_title.png',
             darkGrayBtn: './darkgray.png', lightGrayBtn: './lightgray.png', major: './major.png',
-            yellow: './yellow.png', gray: './gray.png', circleBtn: './circle.png',
+            yellow: './yellow.png', silver: './silver.png', gray: './gray.png', circleBtn: './circle.png',
             soundOn: './sound_on.png', soundOff: './sound_off.png', ground: './ground.png'
         };
         const SOUND_ASSETS = {
@@ -327,7 +327,14 @@
                 ctx.clip();
                 cachedLeaderboard.forEach((entry, index) => {
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
-                    const boxImg = index < 3 ? loadedImages.yellow : loadedImages.gray;
+                    let boxImg;
+                    if (index < 3) {
+                        boxImg = loadedImages.yellow; // 1, 2, 3위
+                    } else if (index < 10) {
+                        boxImg = loadedImages.silver; // 4 ~ 10위
+                    } else {
+                        boxImg = loadedImages.gray; // 11 ~ 20위
+                    }
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
                     const character = characters.find(c => c.name === entry.character);
@@ -523,6 +530,18 @@
         function setRealViewportHeight() { document.body.style.height = `${window.innerHeight}px`; }
         function resizeCanvas() { const vpWidth = window.innerWidth, vpHeight = window.innerHeight; const scale = Math.min(vpWidth / GAME_WIDTH, vpHeight / GAME_HEIGHT); canvas.style.width = `${GAME_WIDTH * scale}px`; canvas.style.height = `${GAME_HEIGHT * scale}px`; const dpr = window.devicePixelRatio || 1; canvas.width = GAME_WIDTH * dpr; canvas.height = GAME_HEIGHT * dpr; ctx.scale(dpr, dpr); drawCurrentState(); }
         
+        async function saveAndGetRank(currentScore, nickname) {
+            try {
+                finalRank = 'saving';
+                await saveToLeaderboard(currentScore, nickname);
+                const higherScoresSnapshot = await leaderboardCollection.where("score", ">", currentScore).get();
+                finalRank = higherScoresSnapshot.size + 1;
+            } catch (error) {
+                console.error("순위 계산 오류:", error);
+                finalRank = "??"; 
+            }
+        }
+
         async function handleInteractionStart(e) {
             e.preventDefault();
             const pos = getEventPos(e);
