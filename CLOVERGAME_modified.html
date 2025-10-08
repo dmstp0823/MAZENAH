@@ -110,7 +110,10 @@
 
         // --- 초기화 및 리소스 로딩 ---
         function initializeFirebase() { try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); leaderboardCollection = db.collection('leaderboard'); } catch (e) { console.error("Firebase 초기화 오류:", e); loadingError = e; gameState = 'error'; } }
-        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(20).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
+        
+        // [수정] 순위표 쿼리 제한을 20에서 30으로 증가
+        function listenForLeaderboardUpdates() { if (!leaderboardCollection) return; leaderboardCollection.orderBy('score', 'desc').limit(30).onSnapshot(snapshot => { cachedLeaderboard = []; snapshot.forEach(doc => cachedLeaderboard.push(doc.data())); }, error => { console.error("순위표 실시간 로딩 오류: ", error); cachedLeaderboard = []; }); }
+        
         async function saveToLeaderboard(newScore, nickname) { if (!leaderboardCollection) return; try { const character = characters.find(c => c.id === selectedCharacterId); const characterName = character ? character.name : 'Unknown'; await leaderboardCollection.add({ score: newScore, name: nickname, character: characterName }); } catch (error) { console.error("순위표 저장 오류:", error); } }
 
         async function loadAsset(type, name, src) {
@@ -320,7 +323,7 @@
             
             // 충돌 상태인 경우
             if (player.hitTimer > 0) {
-                // --- [수정된 깜빡임 로직: Hit Image 표시] ---
+                // --- [피격 이미지 표시 로직] ---
                 const flashRate = 100; // 100ms
                 const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
 
@@ -328,7 +331,6 @@
                 
                 if (isVisible) {
                     // 1. 보이는 프레임: 충돌 이미지(imgHit)가 있다면 그것을 사용하고, 없다면 기본 이미지 사용
-                    // 투명도를 낮추지 않고 완전히 불투명하게 그립니다.
                     imgToDraw = player.imgHit || player.originalImg;
                 } else {
                     // 2. 안 보이는 프레임: 이미지를 그리지 않음 (표준 무적 시간 깜빡임)
@@ -491,13 +493,15 @@
             let textStartX = (GAME_WIDTH - totalTextWidth) / 2;
             ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60'; ctx.fillText(text1, textStartX, currentY);
             ctx.fillStyle = '#2c3e50'; ctx.fillText(text2, textStartX + text1Width, currentY); currentY += lineHeight;
+            // [수정] 순위표 문구를 TOP 20에서 TOP 30으로 변경
             const line4_part1 = '를 세 번 맞으면 '; const line4_part2 = 'GAME OVER!';
             const line4_part1Width = ctx.measureText(line4_part1).width; const line4TotalWidth = iconSize + 5 + line4_part1Width + ctx.measureText(line4_part2).width;
             const line4StartX = (GAME_WIDTH - line4TotalWidth) / 2;
             if (loadedImages.bomb) ctx.drawImage(loadedImages.bomb, line4StartX, currentY - iconSize, iconSize, iconSize);
             ctx.textAlign = 'left'; ctx.fillStyle = '#2c3e50'; ctx.fillText(line4_part1, line4StartX + iconSize + 5, currentY);
             ctx.fillStyle = 'red'; ctx.fillText(line4_part2, line4StartX + iconSize + 5 + line4_part1Width, currentY); currentY += lineHeight;
-            const line5_part1 = "점수가 TOP 30 안에 든다면 "; const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
+            const line5_part1 = "점수가 TOP 30 안에 든다면 "; // TOP 30으로 변경됨
+            const line5_part2 = "명예의 전당"; const line5_part3 = "에 이름을 올릴 수 있습니다";
             const line5_part1Width = ctx.measureText(line5_part1).width; const line5_part2Width = ctx.measureText(line5_part2).width;
             const line5TotalWidth = line5_part1Width + line5_part2Width + ctx.measureText(line5_part3).width;
             const line5StartX = (GAME_WIDTH - line5TotalWidth) / 2;
