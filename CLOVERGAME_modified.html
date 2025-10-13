@@ -459,7 +459,7 @@
                 listStartY = textY + 20;
             }
             const listHeight = GAME_HEIGHT - listStartY - 100;
-            const boxWidth = Math.min(GAME_WIDTH * 0.8, 350); const boxHeight = 40, gap = 10;
+            const boxWidth = Math.min(GAME_WIDTH * 0.85, 400); const boxHeight = 40, gap = 10;
             if (cachedLeaderboard === null) { ctx.font = '20px "MyGameFont"'; ctx.fillText('로딩 중...', GAME_WIDTH / 2, listStartY + 50); }
             else if (cachedLeaderboard.length === 0) { ctx.font = '20px "MyGameFont"'; ctx.fillText('아직 기록이 없습니다!', GAME_WIDTH / 2, listStartY + 50); }
             else { 
@@ -659,7 +659,6 @@
                 ctx.font = '20px "MyGameFont"'; 
                 ctx.fillText('순위에 등록할 닉네임을 입력하세요.', GAME_WIDTH / 2, CENTER_Y + 20);
 
-                // [수정] 닉네임 입력칸 너비 300으로 변경
                 const inputWidth = 300, inputHeight = 40;
                 const inputX = (GAME_WIDTH - inputWidth) / 2;
                 const inputY = CENTER_Y + 70;
