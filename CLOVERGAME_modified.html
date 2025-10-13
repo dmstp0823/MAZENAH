@@ -43,8 +43,8 @@
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
     
-    <!-- [추가] 모바일 키보드를 강제로 띄우기 위한 숨겨진 네이티브 Input -->
-    <input type="text" id="nicknameInputNative" maxlength="10">
+    <!-- [수정] 모바일 키보드를 강제로 띄우기 위한 숨겨진 네이티브 Input의 maxlength를 15로 변경 -->
+    <input type="text" id="nicknameInputNative" maxlength="15">
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -126,9 +126,9 @@
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
         
-        // [추가] 닉네임 입력 관련 상태 및 임시 순위
+        // [수정] 닉네임 입력 관련 상태 및 임시 순위 (MAX_NICKNAME_LENGTH 15로 변경)
         let currentNickname = '';
-        const MAX_NICKNAME_LENGTH = 10;
+        const MAX_NICKNAME_LENGTH = 15;
         let isInputFocused = false;
         let preliminaryRank = null; // [추가] 점수 등록 전 임시 순위
         
@@ -312,8 +312,7 @@
                     inactiveObj.speed = 200;
                     inactiveObj.type = 'good';
                 } else {
-                    // [수정] 폭탄 생성 확률을 약간 낮췄습니다.
-                    const bombChance = Math.min(0.7, 0.28 + (score / 500) * 0.15);
+                    const bombChance = Math.min(0.7, 0.3 + (score / 500) * 0.2);
                     const specialChance = 0.15;
                     const rand = Math.random();
                     if (rand < bombChance) inactiveObj.type = 'bad';
@@ -332,8 +331,7 @@
         
         function updateObjects(deltaTime) {
             spawnTimer += deltaTime; 
-            // [수정] 게임 최대 속도를 4에서 3으로 낮췄습니다.
-            gameSpeedMultiplier = Math.min(3, 1 + (score * 0.01));
+            gameSpeedMultiplier = Math.min(4, 1 + (score * 0.01));
             playerHitbox.x = player.x + player.width * 0.2;
             playerHitbox.y = player.y;
             playerHitbox.width = player.width * 0.6;
@@ -703,7 +701,8 @@
                 ctx.fillStyle = '#2c3e50';
                 ctx.font = '22px "MyGameFont"';
                 ctx.textAlign = 'left';
-                ctx.fillText(currentNickname || '최대 10자', inputX + 10, inputY + 28);
+                // [수정] 안내 문구를 '최대 15자'로 변경
+                ctx.fillText(currentNickname || '최대 15자', inputX + 10, inputY + 28);
                 
                 uiBoxes.nicknameInput = { x: inputX, y: inputY, width: inputWidth, height: inputHeight };
 
@@ -1125,4 +1124,3 @@
     </script>
 </body>
 </html>
-
