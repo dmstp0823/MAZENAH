@@ -43,7 +43,6 @@
     
     <audio id="bgm" src="./Love3.mp3" loop></audio>
     
-    <!-- [수정] 모바일 키보드를 강제로 띄우기 위한 숨겨진 네이티브 Input의 maxlength를 15로 변경 -->
     <input type="text" id="nicknameInputNative" maxlength="15">
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -65,7 +64,6 @@
         const OBJECT_POOL_SIZE = 100;
         const MAX_SFX_PER_FRAME = 3; 
 
-        // [유지] 게임 오버 UI 이동량: -200 유지
         const GAME_OVER_UI_SHIFT = -200; 
 
         const FIREBASE_CONFIG = {
@@ -102,7 +100,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const bgm = document.getElementById('bgm');
-        const nativeInput = document.getElementById('nicknameInputNative'); // 네이티브 input 요소
+        const nativeInput = document.getElementById('nicknameInputNative');
         
         let db, leaderboardCollection, cachedLeaderboard = null;
         let selectedCharacterId = 1;
@@ -114,28 +112,24 @@
         let feverScore = 0, isFeverTime = false, feverTimer = 0;
         let lives;
         let animationFrameId;
-        let hasInteracted = false; // 오디오 활성화 플래그 (최초 터치 여부)
-        let isMuted = false; // 음소거 상태
+        let hasInteracted = false; 
+        let isMuted = false;
         let finalRank = null; 
         
         const loadedImages = {};
         
-        // Web Audio API 관련 변수
         let audioContext = null; 
-        let sfxBuffers = {}; // 디코딩된 오디오 버퍼를 저장합니다.
+        let sfxBuffers = {};
         let sfxLastPlayed = {};
         let sfxPlayedThisFrame = 0;
         
-        // [수정] 닉네임 입력 관련 상태 및 임시 순위 (MAX_NICKNAME_LENGTH 15로 변경)
         let currentNickname = '';
         const MAX_NICKNAME_LENGTH = 15;
         let isInputFocused = false;
-        let preliminaryRank = null; // [추가] 점수 등록 전 임시 순위
+        let preliminaryRank = null;
         
-        // [요청 5] 게임 플레이 경험 유무
         let hasPlayedOnce = false; 
         
-        // [요청 4] 깜빡임 타이머
         let blinkTimer = 0;
 
 
@@ -250,8 +244,7 @@
                 console.error("Web Audio API playback failed:", e);
             }
         }
-
-        // [추가] 등록 전 임시 순위를 계산하고 표시합니다.
+        
         async function getPreliminaryRank(currentScore) {
             if (!leaderboardCollection || currentScore === undefined) return;
             
@@ -259,7 +252,6 @@
             drawCurrentState();
 
             try {
-                // 현재 점수보다 높은 점수를 가진 문서의 개수를 세기 위한 쿼리
                 const higherScoresSnapshot = await leaderboardCollection
                     .where('score', '>', currentScore)
                     .get();
@@ -284,19 +276,18 @@
             gameSpeedMultiplier = 1; feverScore = 0; isFeverTime = false; feverTimer = 0;
             lives = MAX_LIVES; gameState = 'playing';
             finalRank = null;
-            preliminaryRank = null; // 게임 시작 시 초기화
+            preliminaryRank = null;
             currentNickname = '';
             isInputFocused = false;
-            nativeInput.value = ''; // 네이티브 input 초기화
-            nativeInput.blur(); // 네이티브 input 포커스 해제
+            nativeInput.value = '';
+            nativeInput.blur();
             objectPool = [];
             for (let i = 0; i < OBJECT_POOL_SIZE; i++) objectPool.push({ active: false });
             bgm.currentTime = 0;
-            bgm.volume = BGM_VOLUME_NORMAL; // 인게임 볼륨 설정
+            bgm.volume = BGM_VOLUME_NORMAL;
             
-            // [수정] 게임 시작 시 무조건 BGM 재생 시도 (AudioContext resume 포함)
             if (!isMuted) { 
-                initAudioContext(true); // 강제 재생 시도 (인게임 볼륨)
+                initAudioContext(true);
             }
         }
 
@@ -368,7 +359,7 @@
                     gameState = 'gameOver'; 
                     bgm.pause(); 
                     playSound(SOUND_ASSETS.gameOver);
-                    getPreliminaryRank(score); // [추가] 게임 오버 시 즉시 순위 계산 시작
+                    getPreliminaryRank(score);
                 }
             } else if (obj.type === 'special') {
                 feverScore++;
@@ -390,7 +381,7 @@
             let imgToDraw = player.originalImg;
             
             if (player.hitTimer > 0) {
-                const flashRate = 100; // 100ms
+                const flashRate = 100;
                 const isVisible = Math.floor(player.hitTimer / flashRate) % 2 === 0;
                 
                 if (isVisible) {
@@ -486,13 +477,9 @@
                     const boxY = listStartY + index * (boxHeight + gap) + leaderboardScrollY;
                     let boxImg;
                     
-                    if (rank <= 3) {
-                        boxImg = loadedImages.yellow; // 1~3위: Yellow
-                    } else if (rank <= 10) { 
-                        boxImg = loadedImages.silver; // 4~10위: Silver
-                    } else {
-                        boxImg = loadedImages.gray; // 11위~: Gray
-                    }
+                    if (rank <= 3) boxImg = loadedImages.yellow;
+                    else if (rank <= 10) boxImg = loadedImages.silver;
+                    else boxImg = loadedImages.gray;
                     
                     if (boxImg) ctx.drawImage(boxImg, (GAME_WIDTH - boxWidth) / 2, boxY, boxWidth, boxHeight);
                     ctx.fillStyle = '#2c3e50'; ctx.font = 'bold 18px "MyGameFont"'; const rankTextX = (GAME_WIDTH - boxWidth) / 2 + 20;
@@ -542,7 +529,7 @@
         }
         
         function drawMainMenu() {
-            uiBoxes = {}; // uiBoxes 초기화
+            uiBoxes = {};
             ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
             let currentY = GAME_HEIGHT * 0.1;
@@ -607,15 +594,12 @@
                 ctx.fillText(btn.text, GAME_WIDTH / 2, btn.y + btnHeight / 2 + (btnFontSize / 3)); 
             });
 
-            // [수정] 배경음 재생 안내 문구 위치 조정 (+30 -> +45)
             if (!hasPlayedOnce) {
-                // blinkTimer를 사용하여 0.2 ~ 1.0 사이의 불투명도를 계산합니다.
                 const blinkPhase = Math.abs(Math.sin(blinkTimer * Math.PI)); 
-                ctx.fillStyle = `rgba(40, 167, 69, ${blinkPhase * 0.8 + 0.2})`; // 연두색 (Greenish color)
+                ctx.fillStyle = `rgba(40, 167, 69, ${blinkPhase * 0.8 + 0.2})`;
                 ctx.font = '18px "MyGameFont"';
                 ctx.textAlign = 'center';
                 
-                // 위치 조정: Y좌표를 15 더 내림 (30 -> 45)
                 const blinkTextY = buttonStartY + (btnHeight * 3) + (gap * 2) + 45;
                 ctx.fillText('☘️화면의 아무 곳이나 터치하면 배경음이 재생됩니다☘️', GAME_WIDTH / 2, blinkTextY);
             }
@@ -643,33 +627,54 @@
             ctx.fillStyle = 'white'; ctx.fillText('메인으로', centerX, centerY + btnHeight / 2 + gap / 2 + 8);
         }
 
-        // [수정] 닉네임 입력 및 순위 표시를 위한 UI 로직 변경 및 PC/모바일 분리 적용
         function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
             
-// ... existing code ... -->
+            let UI_SHIFT = 0;
+            if (isInputFocused && window.innerWidth < 768) {
+                UI_SHIFT = GAME_OVER_UI_SHIFT;
+            }
+            
+            const CENTER_Y = GAME_HEIGHT / 2 + UI_SHIFT;
+            
+            ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; 
+            ctx.fillText('GAME OVER', GAME_WIDTH / 2, CENTER_Y - 160); 
+            
+            ctx.font = '24px "MyGameFont"'; 
+            ctx.fillText('Final Score: ' + score, GAME_WIDTH / 2, CENTER_Y - 100); 
+
+            ctx.font = 'bold 28px "MyGameFont"';
+            let rankText = '';
+            if (preliminaryRank === 'calculating') {
+                rankText = '순위 계산 중...';
+                ctx.font = '20px "MyGameFont"';
+            } else if (finalRank !== null && finalRank !== 'saving') {
+                rankText = `당신의 순위: ${finalRank}위`;
+            } else {
+                rankText = `예상 순위: ${preliminaryRank || '??'}위`;
+            }
+            ctx.fillText(rankText, GAME_WIDTH / 2, CENTER_Y - 40);
+
+            if (finalRank === null || finalRank === 'saving') {
                 ctx.font = '20px "MyGameFont"'; 
                 ctx.fillText('순위에 등록할 닉네임을 입력하세요.', GAME_WIDTH / 2, CENTER_Y + 20);
 
-                // 4. 닉네임 입력 필드 (캔버스 렌더링)
+                // [수정] 닉네임 입력칸 너비 300으로 변경
                 const inputWidth = 300, inputHeight = 40;
                 const inputX = (GAME_WIDTH - inputWidth) / 2;
-                const inputY = CENTER_Y + 70; // UI를 아래로 내림
+                const inputY = CENTER_Y + 70;
                 const btnGap = 10, btnWidth = 120, btnHeight = 50;
                 const btnY = inputY + inputHeight + 40;
                 
-                // 입력 필드 배경
                 ctx.fillStyle = isInputFocused ? '#fffbe6' : '#fff';
                 ctx.fillRect(inputX, inputY, inputWidth, inputHeight);
                 ctx.strokeStyle = isInputFocused ? '#e67e22' : '#ccc';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(inputX, inputY, inputWidth, inputHeight);
                 
-                // 입력된 텍스트
                 ctx.fillStyle = '#2c3e50';
                 ctx.font = '22px "MyGameFont"';
                 ctx.textAlign = 'left';
-                // [수정] 안내 문구를 '최대 15자'로 변경
                 ctx.fillText(currentNickname || '최대 15자', inputX + 10, inputY + 28);
                 
                 uiBoxes.nicknameInput = { x: inputX, y: inputY, width: inputWidth, height: inputHeight };
@@ -677,18 +682,12 @@
                 if (finalRank === 'saving') {
                     drawButton(btnY, '순위 기록 중...', loadedImages.lightGrayBtn, 'black', 'saveBtn', 180, 50);
                 } else {
-                    
-                    // 등록하기 버튼 (왼쪽) - lightGray/black
                     drawButton(btnY, '등록하기', loadedImages.lightGrayBtn, 'black', 'saveBtn', btnWidth, btnHeight, -(btnWidth / 2) - (btnGap / 2));
-                    
-                    // 취소/메인 버튼 (오른쪽) - darkGray/white
                     drawButton(btnY, '취소/메인', loadedImages.darkGrayBtn, 'white', 'cancelBtn', btnWidth, btnHeight, (btnWidth / 2) + (btnGap / 2));
                 }
                 
-
             } else { 
-                // 최종 순위 표시 후 '계속하기' 버튼
-                drawButton(CENTER_Y + 100, '계속하기', loadedImages.darkGrayBtn, 'white', 'continueBtn', 180, 50); // UI를 아래로 내림
+                drawButton(CENTER_Y + 100, '계속하기', loadedImages.darkGrayBtn, 'white', 'continueBtn', 180, 50);
             }
         }
 
@@ -738,12 +737,11 @@
         }
 
         function drawStartScreen() { 
-            // drawMainMenu에서 uiBoxes를 초기화하고 배경을 그립니다.
             if (startScreenState === 'main') drawMainMenu(); 
             else if (startScreenState === 'leaderboard') drawLeaderboardScreen(); 
             else if (startScreenState === 'characterSelect') drawCharacterSelectScreen(); 
             else if (startScreenState === 'credit') drawCreditScreen(); 
-            drawMuteButton(); // 모든 시작 화면에 음소거 버튼 표시
+            drawMuteButton();
         }
 
         function drawCurrentState() {
@@ -781,7 +779,6 @@
         async function saveAndGetRank(currentScore, nickname) {
             try {
                 finalRank = 'saving';
-                // 순위 계산 대기 중에도 UI 업데이트
                 drawCurrentState(); 
 
                 await saveToLeaderboard(currentScore, nickname);
@@ -795,18 +792,15 @@
             }
         }
 
-        // [수정] 배경음 재생 안정성 강화를 위해 AudioContext 활성화 로직을 최적화
         function initAudioContext(forcePlay = false) {
             if (!audioContext) {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
             
-            // AudioContext 활성화 (resume) 시도
             if (audioContext.state === 'suspended' || audioContext.state === 'closed') {
                 audioContext.resume().then(() => {
                     console.log('AudioContext resumed successfully.');
                     hasInteracted = true;
-                    // BGM 재생을 별도의 setTimeout으로 래핑하여 오디오 처리 지연 시간을 확보
                     setTimeout(() => {
                         if (!isMuted && (hasInteracted || forcePlay)) { 
                             bgm.volume = forcePlay ? BGM_VOLUME_NORMAL : BGM_VOLUME_MENU;
@@ -832,13 +826,11 @@
             e.preventDefault();
             const pos = getEventPos(e);
 
-            // [최적화] 최초 터치 시 AudioContext 활성화 시도를 터치 이벤트의 동기적 부분에서 실행
             if (!hasInteracted) {
                 if (!audioContext) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 }
                 
-                // AudioContext.resume()은 사용자 상호작용 내에서 호출되어야 가장 성공률이 높습니다.
                 if (audioContext.state === 'suspended' || audioContext.state === 'closed') {
                     audioContext.resume().then(() => {
                         console.log('AudioContext resumed successfully on first interaction.');
@@ -851,7 +843,7 @@
                         console.error("AudioContext resume failed:", e);
                     });
                 } else {
-                    hasInteracted = true; // 이미 running 상태인 경우 상호작용 플래그만 설정
+                    hasInteracted = true;
                     if (!isMuted && bgm.paused) {
                         bgm.volume = BGM_VOLUME_MENU;
                         bgm.play().catch(e => console.log("Menu BGM play failed in running state:", e));
@@ -859,7 +851,6 @@
                 }
             }
             
-            // 게임 오버 상태가 아닐 때는 네이티브 Input 포커스 해제
             if (gameState !== 'gameOver') {
                  nativeInput.blur();
                  isInputFocused = false;
@@ -872,9 +863,7 @@
                     bgm.pause();
                     if (audioContext) audioContext.suspend();
                 } else {
-                    // 음소거 해제 시 현재 상태에 맞는 볼륨으로 재생 시도
                     bgm.volume = gameState === 'playing' ? BGM_VOLUME_NORMAL : BGM_VOLUME_MENU;
-                    // initAudioContext를 호출하여 AudioContext를 resume 상태로 유지하며 BGM 재생을 시도합니다.
                     initAudioContext(gameState === 'playing'); 
                 }
                 drawCurrentState(); 
@@ -886,10 +875,8 @@
                 if (startScreenState === 'main') {
                     if (isInside(pos, uiBoxes.charSelectBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'characterSelect'; }
                     else if (isInside(pos, uiBoxes.leaderboardBtn)) { playSound(SOUND_ASSETS.buttonClick); leaderboardScrollY = 0; startScreenState = 'leaderboard'; }
-                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(SOUND_ASSETS.buttonClick); init(); } // init()에서 BGM 강제 재생
+                    else if (isInside(pos, uiBoxes.startBtn)) { playSound(SOUND_ASSETS.buttonClick); init(); }
                     else if (isInside(pos, uiBoxes.creditBtn)) { playSound(SOUND_ASSETS.buttonClick); startScreenState = 'credit'; }
-                    
-                    
                 } else {
                     if (startScreenState === 'characterSelect') { 
                         uiBoxes.characterBoxes.forEach(box => { 
@@ -919,10 +906,8 @@
                     bgm.currentTime = 0; bgm.play().catch(e => console.log("BGM play failed on return to main:", e)); 
                 }
             } else if (gameState === 'gameOver') {
-                // [수정 3] 순위 계산 여부와 상관없이 닉네임 입력/버튼 클릭 가능
                 if (finalRank === null || finalRank === 'saving') { 
                     if (uiBoxes.nicknameInput && isInside(pos, uiBoxes.nicknameInput)) {
-                        // 캔버스 입력 필드 터치 시, 네이티브 input에 포커스
                         isInputFocused = true;
                         nativeInput.focus();
                         drawCurrentState();
@@ -931,7 +916,6 @@
                         isInputFocused = false;
                         const nickname = currentNickname.trim();
                         if (nickname) {
-                            // 순위 계산 중이더라도 등록 시작
                             saveAndGetRank(score, nickname);
                         } else {
                             resetToMainMenu();
@@ -951,7 +935,6 @@
         }
         
         function resetToMainMenu() {
-            // [요청 5] 게임 플레이 후 복귀 시 플래그 설정
             hasPlayedOnce = true;
             
             gameState = 'startScreen'; 
@@ -983,15 +966,13 @@
             isDragging = false; 
         }
 
-        // 키보드 입력은 네이티브 input의 'input' 이벤트로 처리되므로, 키다운 핸들러는 단순화
         function handleKeyDown(e) { 
             if (gameState === 'playing') {
                 if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed; 
                 else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed;
             } else if (gameState === 'gameOver' && (finalRank === null || finalRank === 'saving') && isInputFocused) {
-                 // 네이티브 인풋이 포커스된 경우, ESC 키 외에는 브라우저가 처리하도록 둡니다.
                  if (e.key === 'Escape') {
-                    nativeInput.blur(); // ESC 누르면 포커스 해제
+                    nativeInput.blur();
                     resetToMainMenu();
                  }
             }
@@ -1010,13 +991,11 @@
             } 
         }
         
-        // [추가] 네이티브 input 변경 이벤트 핸들러
         nativeInput.addEventListener('input', () => {
             currentNickname = nativeInput.value;
             drawCurrentState();
         });
 
-        // [추가] 네이티브 input 포커스 해제 이벤트 핸들러
         nativeInput.addEventListener('blur', () => {
             if (gameState === 'gameOver' && (finalRank === null || finalRank === 'saving')) {
                 isInputFocused = false;
@@ -1031,7 +1010,6 @@
             sfxPlayedThisFrame = 0;
             cancelAnimationFrame(animationFrameId);
             
-            // [요청 4] 깜빡임 타이머 업데이트
             blinkTimer = (timestamp % 2000) / 2000; 
 
             if (gameState === 'loading' || gameState === 'error') { drawCurrentState(); animationFrameId = requestAnimationFrame(gameLoop); return; }
@@ -1075,8 +1053,6 @@
             }
         });
         
-        // [수정] 최초 터치 시 배경음이 재생되지 않더라도 hasInteracted는 설정되어야 합니다.
-        // 따라서 touch/click 이벤트는 hasInteracted 플래그를 설정하고 AudioContext를 활성화하는 역할만 수행합니다.
         canvas.addEventListener('touchstart', handleInteractionStart, { passive: false });
         canvas.addEventListener('touchmove', handleInteractionMove, { passive: false });
         canvas.addEventListener('touchend', handleInteractionEnd);
