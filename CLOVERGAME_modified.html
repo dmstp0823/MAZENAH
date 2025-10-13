@@ -647,44 +647,12 @@
         function drawGameOver() {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); 
             
-            // [수정] PC/모바일 분리: isInputFocused 상태이고 뷰포트 너비가 768px 미만일 때만 UI를 이동시킵니다.
-            let UI_SHIFT = 0;
-            if (isInputFocused && window.innerWidth < 768) {
-                UI_SHIFT = GAME_OVER_UI_SHIFT; // -200
-            }
-            
-            const CENTER_Y = GAME_HEIGHT / 2 + UI_SHIFT;
-            
-            ctx.fillStyle = 'white'; ctx.font = 'bold 40px "MyGameFont"'; ctx.textAlign = 'center'; 
-            ctx.fillText('GAME OVER', GAME_WIDTH / 2, CENTER_Y - 160); 
-            
-            // 1. 최종 점수 표시
-            ctx.font = '24px "MyGameFont"'; 
-            ctx.fillText('Final Score: ' + score, GAME_WIDTH / 2, CENTER_Y - 100); 
-
-            // 2. 순위 표시/계산 상태
-            ctx.font = 'bold 28px "MyGameFont"';
-            let rankText = '';
-            if (preliminaryRank === 'calculating') {
-                rankText = '순위 계산 중...';
-                ctx.font = '20px "MyGameFont"';
-            } else if (finalRank !== null && finalRank !== 'saving') {
-                // 저장 후 최종 순위
-                rankText = `당신의 순위: ${finalRank}위`;
-            } else {
-                // 저장 전 임시 순위
-                rankText = `예상 순위: ${preliminaryRank || '??'}위`;
-            }
-            ctx.fillText(rankText, GAME_WIDTH / 2, CENTER_Y - 40);
-
-            if (finalRank === null || finalRank === 'saving') {
-                // 3. 닉네임 입력 및 버튼 (순위 계산 중이더라도 입력 가능)
-                
+// ... existing code ... -->
                 ctx.font = '20px "MyGameFont"'; 
                 ctx.fillText('순위에 등록할 닉네임을 입력하세요.', GAME_WIDTH / 2, CENTER_Y + 20);
 
                 // 4. 닉네임 입력 필드 (캔버스 렌더링)
-                const inputWidth = 250, inputHeight = 40;
+                const inputWidth = 300, inputHeight = 40;
                 const inputX = (GAME_WIDTH - inputWidth) / 2;
                 const inputY = CENTER_Y + 70; // UI를 아래로 내림
                 const btnGap = 10, btnWidth = 120, btnHeight = 50;
@@ -1124,3 +1092,4 @@
     </script>
 </body>
 </html>
+
